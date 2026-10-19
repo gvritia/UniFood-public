@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pydantic[email]
+python-jose[cryptography]  # для JWT
+passlib[bcrypt]             # для хеширования паролей
+python-multipart            # нужен для OAuth2PasswordRequestForm
+email-validator               # для валидации email
+bcrypt>=3.2.2,<4.0            # совместимая версия с passlib
