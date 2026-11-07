@@ -151,8 +151,11 @@ const BoxWrapper = ({ children }) => {
         minHeight: '100vh',
       }}
     >
+      <Box component="a" href="#main-content" sx={{ position: 'absolute', top: -48, left: 8, zIndex: 2000, bgcolor: 'background.paper', color: 'text.primary', p: 1, '&:focus': { top: 8 } }}>
+        Перейти к содержимому
+      </Box>
       <Header />
-      <Box component="main" sx={{ flexGrow: 1 }}>
+      <Box component="main" id="main-content" tabIndex={-1} sx={{ flexGrow: 1 }}>
         {children}
       </Box>
       <Footer />

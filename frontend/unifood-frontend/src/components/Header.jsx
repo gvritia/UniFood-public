@@ -53,6 +53,8 @@ const Header = () => {
               color="inherit"
               edge="start"
               onClick={handleDrawerToggle}
+              aria-label={mobileOpen ? 'Закрыть меню навигации' : 'Открыть меню навигации'}
+              aria-expanded={mobileOpen}
               sx={{ mr: 2, display: { sm: 'none' } }}
             >
               <MenuIcon />
@@ -91,6 +93,7 @@ const Header = () => {
                     color="inherit"
                     component={Link}
                     to="/cart"
+                    aria-label={`Корзина, товаров: ${cartItemsCount}`}
                     sx={{ fontWeight: isActive('/cart') ? 'bold' : 'normal' }}
                   >
                     <Badge badgeContent={cartItemsCount} color="error">
@@ -127,7 +130,7 @@ const Header = () => {
                   <Typography variant="body2">{user?.name}</Typography>
                 </Box>
 
-                <IconButton onClick={handleMenuOpen} size="small">
+                <IconButton onClick={handleMenuOpen} size="small" aria-label="Открыть меню профиля" aria-expanded={Boolean(anchorEl)}>
                   <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
                     {user?.name?.charAt(0)}
                   </Avatar>

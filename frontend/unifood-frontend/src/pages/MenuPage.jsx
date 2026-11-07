@@ -18,6 +18,7 @@ const MenuPage = () => {
   const [allItems, setAllItems] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Все');
   const [selectedDish, setSelectedDish] = useState(null);
@@ -66,12 +67,14 @@ const MenuPage = () => {
 
   const fetchMenu = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const response = await menuApi.getMenu({});
       setAllItems(response || []);
       setItems(response || []);
     } catch (error) {
       console.error('Ошибка при загрузке меню:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -112,34 +115,22 @@ const MenuPage = () => {
     setQuantity(1);
   };
 
-  if (!isAuthenticated) {
-    return (
-      <Container maxWidth="md" sx={{ py: 8, textAlign: 'center' }}>
-        <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
-          Меню UniFood
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          Чтобы просмотреть меню и сделать заказ, пожалуйста, войдите в систему.
-        </Typography>
-        <Button variant="contained" size="large" onClick={() => navigate('/auth/login')} sx={{ mr: 2 }}>
-          Войти
-        </Button>
-        <Button variant="outlined" size="large" onClick={() => navigate('/auth/register')}>
-          Зарегистрироваться
-        </Button>
-      </Container>
-    );
-  }
-
   return (
     <Container maxWidth={false} sx={{ py: 4, px: { xs: 2, md: 4 } }}>
       <Typography variant="h3" component="h1" align="center" gutterBottom fontWeight="900">
         Меню UniFood
       </Typography>
 
+      {!isAuthenticated && (
+        <Alert severity="info" sx={{ maxWidth: 800, mx: 'auto', mb: 3 }}>
+          Вы можете посмотреть блюда без регистрации. Чтобы добавить блюдо в корзину, войдите в аккаунт.
+        </Alert>
+      )}
+
       <Box sx={{ mb: 6, maxWidth: '800px', mx: 'auto' }}>
         <TextField
           fullWidth
+          label="Поиск по меню"
           placeholder="Поиск любимого блюда..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -171,12 +162,22 @@ const MenuPage = () => {
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
-          <CircularProgress size={60} thickness={4} />
+          <CircularProgress size={60} thickness={4} aria-label="Загрузка меню" />
         </Box>
-      ) : items.length === 0 ? (
+      ) : loadError ? (
+        <Box sx={{ textAlign: 'center', py: 8 }} role="alert">
+          <Typography sx={{ mb: 2 }}>Не удалось загрузить меню. Проверьте подключение и попробуйте ещё раз.</Typography>
+          <Button variant="contained" onClick={fetchMenu}>Повторить загрузку</Button>
+        </Box>
+      ) : allItems.length === 0 ? (
         <Typography align="center" color="text.secondary" sx={{ py: 12, fontSize: '1.2rem' }}>
-          К сожалению, ничего не нашли. Попробуйте другой запрос.
+          Меню пока пусто. Загляните позже.
         </Typography>
+      ) : items.length === 0 ? (
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>По вашему запросу блюд не найдено.</Typography>
+          <Button onClick={() => { setSearch(''); setSelectedCategory('Все'); }}>Сбросить фильтры</Button>
+        </Box>
       ) : (
         <Box
           sx={{
@@ -283,6 +284,7 @@ const MenuPage = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#f0f4f8', borderRadius: 3, p: 0.5 }}>
                       <IconButton
                         size="small"
+                        aria-label={`Уменьшить количество ${item.food_name}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (cartQuantity <= 1) {
@@ -299,6 +301,7 @@ const MenuPage = () => {
                       </Typography>
                       <IconButton
                         size="small"
+                        aria-label={`Увеличить количество ${item.food_name}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           updateQuantity(cartItem.id, cartQuantity + 1);
@@ -316,7 +319,7 @@ const MenuPage = () => {
                       }}
                       sx={{ borderRadius: 3, px: 3, fontWeight: '900', textTransform: 'none' }}
                     >
-                      В корзину
+                      {isAuthenticated ? 'В корзину' : 'Подробнее'}
                     </Button>
                   )}
                 </CardActions>
@@ -330,7 +333,7 @@ const MenuPage = () => {
         <Dialog open={!!selectedDish} onClose={closeDishModal} maxWidth="md" fullWidth>
           <DialogTitle sx={{ m: 0, p: 2.5, fontWeight: '900', fontSize: '1.1rem' }}>
             {selectedDish.food_name}
-            <IconButton onClick={closeDishModal} sx={{ position: 'absolute', right: 12, top: 12 }}>
+            <IconButton aria-label="Закрыть карточку блюда" onClick={closeDishModal} sx={{ position: 'absolute', right: 12, top: 12 }}>
               <CloseIcon />
             </IconButton>
           </DialogTitle>
@@ -372,13 +375,13 @@ const MenuPage = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Typography variant="body1" sx={{ fontWeight: '700' }}>Кол-во:</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#f0f4f8', borderRadius: 3, px: 1.5, py: 0.5 }}>
-                    <IconButton onClick={() => setQuantity(q => Math.max(1, q - 1))} size="small">
+                    <IconButton aria-label="Уменьшить количество" onClick={() => setQuantity(q => Math.max(1, q - 1))} size="small">
                       <RemoveIcon fontSize="small" />
                     </IconButton>
                     <Typography variant="h6" sx={{ minWidth: 24, textAlign: 'center', fontWeight: '900' }}>
                       {quantity}
                     </Typography>
-                    <IconButton onClick={() => setQuantity(q => q + 1)} size="small">
+                    <IconButton aria-label="Увеличить количество" onClick={() => setQuantity(q => q + 1)} size="small">
                       <AddIcon fontSize="small" />
                     </IconButton>
                   </Box>
@@ -391,7 +394,7 @@ const MenuPage = () => {
                   fullWidth
                   sx={{ borderRadius: 3, fontWeight: '900', textTransform: 'none', mt: 1 }}
                 >
-                  {cartItems?.find(ci => ci.menu_item_id === selectedDish.id)
+                  {!isAuthenticated ? 'Войти, чтобы добавить в корзину' : cartItems?.find(ci => ci.menu_item_id === selectedDish.id)
                     ? `Обновить (${quantity} шт.)`
                     : `В корзину (${quantity} шт.)`}
                 </Button>
