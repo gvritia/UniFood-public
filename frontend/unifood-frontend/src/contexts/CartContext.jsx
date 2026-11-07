@@ -1,45 +1,49 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { cartApi } from '../api/cart';
-import { useAuth } from './AuthContext';
-
-const CartContext = createContext(null);
-
-export const useCart = () => {
-  const context = useContext(CartContext);
-  if (!context) {
-    throw new Error('useCart must be used within a CartProvider');
-  }
-  return context;
-};
+import { useAuth } from './auth-context';
+import { CartContext } from './cart-context';
+import { getApiErrorMessage } from '../api/errors';
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const [totalPrice, setTotalPrice] = useState(0);
   const [loading, setLoading] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const [error, setError] = useState('');
+  const requestId = useRef(0);
+  const { isAuthenticated, user } = useAuth();
 
   // Загружаем корзину при авторизации
   useEffect(() => {
+    requestId.current += 1;
     if (isAuthenticated) {
+      setCartItems([]);
+      setTotalPrice(0);
       fetchCart();
     } else {
       setCartItems([]);
       setTotalPrice(0);
+      setError('');
+      setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.id]);
 
   const fetchCart = async () => {
+    const currentRequest = ++requestId.current;
     setLoading(true);
+    setError('');
     try {
       const data = await cartApi.getCart();
-      setCartItems(data.items || []);
-      setTotalPrice(data.total_price || 0);
+      if (currentRequest === requestId.current) {
+        setCartItems(data.items || []);
+        setTotalPrice(data.total_price || 0);
+      }
     } catch (error) {
       console.error('Ошибка загрузки корзины:', error);
-      setCartItems([]);
-      setTotalPrice(0);
+      if (currentRequest === requestId.current) {
+        setError(getApiErrorMessage(error, 'Не удалось загрузить корзину. Попробуйте ещё раз.'));
+      }
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   };
 
@@ -95,6 +99,7 @@ export const CartProvider = ({ children }) => {
     cartItems,
     totalPrice,
     loading,
+    error,
     addToCart,
     updateQuantity,
     removeItem,

@@ -45,5 +45,12 @@ export const adminApi = {
   deleteMenuItem: async (itemId) => {
     const response = await api.delete(`/menu/${itemId}`);
     return response.data;
+  },
+
+  uploadMenuImage: async (itemId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post(`/menu/${itemId}/image`, formData);
+    return response.data;
   }
 };

@@ -7,7 +7,8 @@ import {
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { ordersApi } from '../api/orders';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/auth-context';
+import { getApiErrorMessage } from '../api/errors';
 
 const statusColors = {
   new: 'info',
@@ -28,6 +29,7 @@ const statusLabels = {
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const { isAuthenticated } = useAuth();
   const location = useLocation();
@@ -40,11 +42,13 @@ const OrdersPage = () => {
 
   const fetchOrders = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await ordersApi.getMyOrders();
       setOrders(data);
     } catch (error) {
       console.error('Ошибка загрузки заказов:', error);
+      setLoadError(getApiErrorMessage(error, 'Не удалось загрузить заказы. Попробуйте ещё раз.'));
     } finally {
       setLoading(false);
     }
@@ -76,6 +80,10 @@ const OrdersPage = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
+      ) : loadError ? (
+        <Alert severity="error" sx={{ mt: 4 }} action={<Button color="inherit" onClick={fetchOrders}>Повторить</Button>}>
+          {loadError}
+        </Alert>
       ) : orders.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
           <Typography variant="h6" gutterBottom>

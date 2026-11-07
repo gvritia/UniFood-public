@@ -11,8 +11,8 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import { menuApi } from '../api/menu';
-import { useCart } from '../contexts/CartContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/cart-context';
+import { useAuth } from '../contexts/auth-context';
 
 const MenuPage = () => {
   const [allItems, setAllItems] = useState([]);

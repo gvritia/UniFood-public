@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Container, Box, Typography, TextField, Button, Paper, Alert, Link as MuiLink
 } from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/auth-context';
+import { getApiErrorMessage } from '../api/errors';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -33,8 +34,12 @@ const RegisterPage = () => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Пароль должен содержать минимум 6 символов');
+    if (formData.password.length < 8 ||
+        !/[A-ZА-ЯЁ]/.test(formData.password) ||
+        !/[a-zа-яё]/.test(formData.password) ||
+        !/\d/.test(formData.password) ||
+        ![...formData.password].some((char) => "!@#$%^&*()_+-=[]{};':\"\\|,.<>/?".includes(char))) {
+      setError('Пароль: минимум 8 символов, заглавная и строчная буква, цифра и спецсимвол.');
       return;
     }
 
@@ -49,7 +54,7 @@ const RegisterPage = () => {
       // После регистрации автоматически входим
       navigate('/auth/login', { state: { registered: true } });
     } catch (err) {
-      setError(err.response?.data?.detail || 'Ошибка регистрации. Возможно, email уже занят.');
+      setError(getApiErrorMessage(err, 'Ошибка регистрации. Возможно, email уже занят.'));
     } finally {
       setLoading(false);
     }
@@ -64,6 +69,9 @@ const RegisterPage = () => {
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
             Создайте аккаунт для заказа еды
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Пароль: минимум 8 символов, заглавная и строчная буква, цифра и спецсимвол.
           </Typography>
 
           {error && (

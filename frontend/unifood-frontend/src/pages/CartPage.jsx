@@ -10,12 +10,13 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import { useCart } from '../contexts/CartContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/cart-context';
+import { useAuth } from '../contexts/auth-context';
 import { ordersApi } from '../api/orders';
+import { getApiErrorMessage } from '../api/errors';
 
 const CartPage = () => {
-  const { cartItems, totalPrice, loading, updateQuantity, removeItem, clearCart, refreshCart } = useCart();
+  const { cartItems, totalPrice, loading, error: cartError, updateQuantity, removeItem, clearCart, refreshCart } = useCart();
   const { isAuthenticated, user, refreshUser } = useAuth();
   const navigate = useNavigate();
   // Задача 15: Локальное состояние для ручного ввода количества
@@ -82,14 +83,12 @@ const CartPage = () => {
 
     try {
       await ordersApi.createOrder();
-      // Очищаем корзину после успешного заказа
-      await clearCart();
-      // Обновляем данные пользователя после заказа
-      await refreshUser();
+      // Сервер очищает корзину в той же транзакции, что и создаёт заказ.
+      await Promise.allSettled([refreshCart(), refreshUser()]);
       navigate('/orders', { state: { message: 'Заказ успешно оформлен!' } });
     } catch (error) {
       console.error('Ошибка оформления заказа:', error);
-      const errorMessage = error.response?.data?.detail || 'Ошибка при оформлении заказа. Попробуйте позже.';
+      const errorMessage = getApiErrorMessage(error, 'Ошибка при оформлении заказа. Попробуйте позже.');
       setCheckoutError(errorMessage);
       setPaymentDialogOpen(true);
     }
@@ -132,6 +131,12 @@ const CartPage = () => {
         Корзина
       </Typography>
 
+      {cartError && (
+        <Alert severity="error" sx={{ mb: 3 }} action={<Button color="inherit" onClick={refreshCart}>Повторить</Button>}>
+          {cartError}
+        </Alert>
+      )}
+
       {/* Отображение баланса */}
       {isAuthenticated && (
         <Paper sx={{ p: 2, mb: 3, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
@@ -153,7 +158,7 @@ const CartPage = () => {
         </Paper>
       )}
 
-      {cartItems.length === 0 ? (
+      {cartError && cartItems.length === 0 ? null : cartItems.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
           <Typography variant="h6" gutterBottom>
             Ваша корзина пуста
@@ -305,7 +310,7 @@ const CartPage = () => {
                 variant="contained" 
                 size="large"
                 onClick={handleCheckout}
-                disabled={totalPrice === 0}
+                disabled={totalPrice === 0 || !!cartError}
               >
                 Оформить заказ
               </Button>

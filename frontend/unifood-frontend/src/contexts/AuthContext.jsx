@@ -1,40 +1,35 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { authApi } from '../api/auth';
-
-const AuthContext = createContext(null);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+import { AuthContext } from './auth-context';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('token')));
 
   useEffect(() => {
     // Проверяем наличие токена при загрузке
     const token = localStorage.getItem('token');
+    let cancelled = false;
     if (token) {
       authApi.getMe()
         .then(userData => {
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
+          if (!cancelled && localStorage.getItem('token') === token) {
+            setUser(userData);
+            localStorage.setItem('user', JSON.stringify(userData));
+          }
         })
         .catch(() => {
           // Токен невалиден, удаляем его
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          if (!cancelled && localStorage.getItem('token') === token) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          }
         })
         .finally(() => {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         });
-    } else {
-      setLoading(false);
     }
+    return () => { cancelled = true; };
   }, []);
 
   const login = async (email, password) => {

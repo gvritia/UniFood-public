@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Container, Box, Typography, TextField, Button, Paper, Alert, Link as MuiLink
 } from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/auth-context';
+import { getApiErrorMessage } from '../api/errors';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,16 +21,15 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const data = await login(email, password);
       // Админ — сразу на админ-панель, обычный пользователь — в меню
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (user.is_admin) {
+      if (data.user?.is_admin) {
         navigate('/admin');
       } else {
         navigate('/menu');
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Ошибка входа. Проверьте email и пароль.');
+      setError(getApiErrorMessage(err, 'Ошибка входа. Проверьте email и пароль.'));
     } finally {
       setLoading(false);
     }
@@ -49,6 +50,9 @@ const LoginPage = () => {
             <Alert severity="error" sx={{ mb: 3 }}>
               {error}
             </Alert>
+          )}
+          {location.state?.profileUpdated && (
+            <Alert severity="success" sx={{ mb: 3 }}>Email изменён. Войдите с новым адресом.</Alert>
           )}
 
           <form onSubmit={handleSubmit}>

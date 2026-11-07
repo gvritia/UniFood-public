@@ -98,7 +98,7 @@ PostgreSQL доступен backend внутри сети Compose. Данные 
 
 ## 📝 REST API
 
-Маршруты, схемы, права доступа и примеры запросов описаны в [документации API](docs/api.md). Интерактивная OpenAPI-документация после запуска backend доступна по http://localhost:8001/docs, машинная схема — по http://localhost:8001/openapi.json.
+Маршруты, схемы, права доступа и примеры запросов описаны в [документации API](docs/api.md), а обмен данными между React и FastAPI — в [описании интеграции](docs/frontend-api-integration.md). Интерактивная OpenAPI-документация после запуска backend доступна по http://localhost:8001/docs, машинная схема — по http://localhost:8001/openapi.json.
 
 ### Проверка авторизации
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Box, Typography, Button, Container } from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/auth-context';
 
 // ─── Design Tokens ─────────────────────────────────────────────────────────
 const NAVY    = '#0D1B2A';

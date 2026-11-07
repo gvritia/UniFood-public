@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme, Box } from '@mui/material';
+import { ThemeProvider, createTheme, Box, CircularProgress } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 
 import { AuthProvider } from './contexts/AuthContext';
@@ -18,6 +18,7 @@ import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
 import AdminRoute from './components/AdminRoute';
+import { useAuth } from './contexts/auth-context';
 
 // Создаем тему Material-UI
 const theme = createTheme({
@@ -72,8 +73,11 @@ const theme = createTheme({
 
 // Компонент для защищенных маршрутов
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  if (!token) {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress aria-label="Проверка входа" /></Box>;
+  }
+  if (!isAuthenticated) {
     return <Navigate to="/auth/login" replace />;
   }
   return children;

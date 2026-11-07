@@ -14,8 +14,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
-import { useAuth } from '../contexts/AuthContext';
-import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/auth-context';
+import { useCart } from '../contexts/cart-context';
 
 const Header = () => {
   const { user, isAuthenticated, logout } = useAuth();

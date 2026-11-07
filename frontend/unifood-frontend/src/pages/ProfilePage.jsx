@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Container, Paper, Typography, TextField, Button, Box, Alert,
   Divider, InputAdornment, Card, CardContent, Grid, CircularProgress
@@ -7,12 +7,14 @@ import {
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/auth-context';
 import { profileApi } from '../api/profile';
+import { getApiErrorMessage } from '../api/errors';
 
 const ProfilePage = () => {
-  const { user, isAuthenticated, refreshUser } = useAuth();
+  const { user, isAuthenticated, refreshUser, logout } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -46,6 +48,7 @@ const ProfilePage = () => {
       setCurrentBalance(data.balance || 0);
     } catch (error) {
       console.error('Ошибка загрузки профиля:', error);
+      setMessage({ type: 'error', text: getApiErrorMessage(error, 'Не удалось загрузить профиль') });
     }
   };
 
@@ -71,13 +74,19 @@ const ProfilePage = () => {
       }
 
       await profileApi.updateProfile(updateData);
+      if (updateData.email !== user.email) {
+        logout();
+        navigate('/auth/login', { state: { profileUpdated: true }, replace: true });
+        return;
+      }
+      await refreshUser();
       setMessage({ type: 'success', text: 'Профиль успешно обновлен!' });
       setFormData({ ...formData, password: '' });
-      loadProfile();
+      await loadProfile();
     } catch (error) {
       setMessage({ 
         type: 'error', 
-        text: error.response?.data?.detail || 'Ошибка обновления профиля' 
+        text: getApiErrorMessage(error, 'Ошибка обновления профиля')
       });
     } finally {
       setLoading(false);
@@ -108,7 +117,7 @@ const ProfilePage = () => {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: error.response?.data?.detail || 'Ошибка пополнения баланса'
+        text: getApiErrorMessage(error, 'Ошибка пополнения баланса')
       });
     } finally {
       setBalanceLoading(false);

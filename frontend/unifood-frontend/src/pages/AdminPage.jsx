@@ -18,6 +18,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { adminApi } from '../api/admin';
 import { menuApi } from '../api/menu';
+import { getApiErrorMessage } from '../api/errors';
 
 const STATUS_LABELS = {
   new: { label: 'Новый', color: 'primary' },
@@ -68,7 +69,7 @@ const AdminPage = () => {
       }
     } catch (error) {
       console.error(error);
-      setError('Ошибка при загрузке данных');
+      setError(getApiErrorMessage(error, 'Ошибка при загрузке данных'));
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ const AdminPage = () => {
       setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
       showToast('Статус заказа обновлен');
     } catch (error) {
-      const detail = error.response?.data?.detail || 'Ошибка при обновлении статуса';
+      const detail = getApiErrorMessage(error, 'Ошибка при обновлении статуса');
       showToast(detail, 'error');
     }
   };
@@ -96,7 +97,7 @@ const AdminPage = () => {
       const data = await adminApi.getOrders(orderSearch ? { search: orderSearch } : {});
       setOrders(data);
     } catch (error) {
-      setError('Ошибка при поиске заказов');
+      setError(getApiErrorMessage(error, 'Ошибка при поиске заказов'));
     } finally {
       setLoading(false);
     }
@@ -118,7 +119,7 @@ const AdminPage = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, is_admin: !currentStatus } : u));
       showToast('Роль пользователя обновлена');
     } catch (error) {
-      showToast('Ошибка при смене роли', 'error');
+      showToast(getApiErrorMessage(error, 'Ошибка при смене роли'), 'error');
     }
   };
 
@@ -129,7 +130,7 @@ const AdminPage = () => {
       setMenuItems(menuItems.filter(item => item.id !== id));
       showToast('Блюдо удалено');
     } catch (error) {
-      showToast('Ошибка при удалении', 'error');
+      showToast(getApiErrorMessage(error, 'Ошибка при удалении'), 'error');
     }
   };
 
@@ -142,21 +143,11 @@ const AdminPage = () => {
       const file = e.target.files[0];
       if (!file) return;
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const API_URL = import.meta.env.VITE_API_URL || '/api';
-        const token = localStorage.getItem('token');
-        const resp = await fetch(`${API_URL}/menu/${id}/image`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        if (!resp.ok) throw new Error('Ошибка загрузки');
-        const data = await resp.json();
+        const data = await adminApi.uploadMenuImage(id, file);
         setMenuItems(menuItems.map(m => m.id === id ? data : m));
         showToast('Фото загружено');
       } catch (error) {
-        showToast('Ошибка при загрузке фото', 'error');
+        showToast(getApiErrorMessage(error, 'Ошибка при загрузке фото'), 'error');
       }
     };
     input.click();
@@ -197,7 +188,7 @@ const AdminPage = () => {
       }
       setMenuDialogOpen(false);
     } catch (error) {
-      showToast('Ошибка при сохранении', 'error');
+      showToast(getApiErrorMessage(error, 'Ошибка при сохранении'), 'error');
     }
   };
 
