@@ -16,7 +16,7 @@ class OrderStatus(str, Enum):
 
 
 class OrderItemBase(BaseModel):
-    menu_item_id: int
+    menu_item_id: Optional[int]
     quantity: int
     price_at_order: float
 
@@ -50,10 +50,10 @@ class OrderStatusUpdate(BaseModel):
 
 
 class GuestOrderItem(BaseModel):
-    menu_item_id: int
-    quantity: int = Field(gt=0)
+    menu_item_id: int = Field(gt=0)
+    quantity: int = Field(gt=0, le=99)
 
 
 class GuestOrderCreate(BaseModel):
-    items: List[GuestOrderItem] = Field(min_length=1)
-    total: float = Field(ge=0)
+    items: List[GuestOrderItem] = Field(min_length=1, max_length=100)
+    total: float = Field(ge=0, allow_inf_nan=False)

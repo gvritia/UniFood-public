@@ -67,10 +67,15 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Ловим ошибки валидации (400 Bad Request)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    logger.warning(f"Validation error at {request.url}: {exc.errors()}")
+    # Не возвращаем и не записываем в лог значения полей, в том числе пароли.
+    safe_errors = [
+        {key: value for key, value in error.items() if key not in {"input", "ctx"}}
+        for error in exc.errors()
+    ]
+    logger.warning("Validation error at %s: %s", request.url.path, safe_errors)
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()}
+        content={"detail": safe_errors}
     )
 
 class LoggingMiddleware(BaseHTTPMiddleware):

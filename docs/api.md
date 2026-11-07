@@ -40,6 +40,8 @@ curl.exe -X POST http://localhost:8001/auth/login -d "username=student@example.c
 
 `MenuItemCreate` содержит `food_name`, `price`, `category` и необязательные `ingredients`, `description`, `image_url`, `calories`. `MenuItemResponse` добавляет `id`, `created_at`, `updated_at`. `q` ищет по названию блюда; `category` фильтрует по категории.
 
+Цена должна быть больше нуля и не превышать 100 000 ₽. Фото может быть JPEG, PNG или WebP размером до 5 МБ; содержимое файла проверяется независимо от имени и MIME-типа, указанного отправителем.
+
 ```bash
 curl.exe "http://localhost:8001/menu/?category=Напитки&q=чай&skip=0&limit=20"
 curl.exe -X POST http://localhost:8001/menu/ -H "Authorization: Bearer <JWT>" -H "Content-Type: application/json" -d '{"food_name":"Чай","price":80,"category":"Напитки"}'
@@ -58,6 +60,8 @@ curl.exe -X POST http://localhost:8001/menu/ -H "Authorization: Bearer <JWT>" -H
 | `DELETE /cart/` | — | `204`, без тела |
 
 `POST /cart/` увеличивает количество, если блюдо уже находится в корзине. `PATCH` с количеством не больше нуля удаляет позицию и возвращает `204` без тела. Удаление отдельной позиции доступно только владельцу; для чужой или отсутствующей позиции возвращается `404`.
+
+Количество при добавлении должно быть от 1 до 99; при изменении — от 0 до 99.
 
 ## Заказы
 

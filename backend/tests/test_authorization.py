@@ -3,6 +3,8 @@
 import os
 import logging
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -11,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg2://test:test@localhost/test"
-os.environ["SECRET_KEY"] = "test-only-signing-key"
+os.environ["SECRET_KEY"] = "test-only-signing-key-long-enough"
 
 from app.db import Base, get_db  # noqa: E402
 
@@ -23,6 +25,7 @@ from app.models.models_cart import CartItem  # noqa: E402
 from app.models.models_menu import Menu  # noqa: E402
 from app.models.models_order import Order, OrderStatus  # noqa: E402
 from app.models.models_user import User  # noqa: E402
+from app.routers import routers_menu  # noqa: E402
 
 logging.getLogger("app.main").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -170,6 +173,107 @@ class AuthorizationTests(unittest.TestCase):
         headers = self.auth(self.admin)
         self.assertEqual(self.client.put(path, json={"is_admin": False}, headers=headers).status_code, 400)
         self.assertEqual(self.client.delete(path, headers=headers).status_code, 400)
+
+    def test_invalid_numbers_are_rejected(self):
+        self.assertEqual(
+            self.client.post(
+                "/menu/",
+                json={"food_name": "Test", "price": -1, "category": "Test"},
+                headers=self.auth(self.admin),
+            ).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/cart/",
+                json={"menu_item_id": 1, "quantity": -2},
+                headers=self.auth(self.alice),
+            ).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/profile/balance",
+                json={"amount": -10},
+                headers=self.auth(self.alice),
+            ).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.put(
+                "/profile/me", json={"name": None}, headers=self.auth(self.alice)
+            ).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.put(
+                f"/users/{self.bob.id}",
+                json={"is_admin": None},
+                headers=self.auth(self.admin),
+            ).status_code,
+            422,
+        )
+        menu = Menu(food_name="Test meal", price=100, category="Test")
+        self.db.add(menu)
+        self.db.commit()
+        self.assertEqual(
+            self.client.put(
+                f"/menu/{menu.id}", json={"price": None}, headers=self.auth(self.admin)
+            ).status_code,
+            422,
+        )
+
+    def test_validation_response_does_not_echo_input(self):
+        password = "StrongPass1!"
+        response = self.client.post(
+            "/users/",
+            json={"email": "bad-email", "name": "Test", "password": password},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertNotIn(password, response.text)
+        self.assertTrue(all("input" not in item for item in response.json()["detail"]))
+
+    def test_bcrypt_password_limit_is_enforced(self):
+        response = self.client.post(
+            "/users/",
+            json={"email": "long@example.com", "name": "Test", "password": "StrongPass1!" + "x" * 70},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_rejects_oversize_and_spoofed_image(self):
+        menu = Menu(food_name="Test meal", price=100, category="Test")
+        self.db.add(menu)
+        self.db.commit()
+        path = f"/menu/{menu.id}/image"
+        headers = self.auth(self.admin)
+        with TemporaryDirectory() as directory, patch.object(routers_menu, "UPLOAD_DIR", Path(directory)):
+            spoofed = self.client.post(
+                path,
+                files={"file": ("evil.png", b"not a PNG", "image/png")},
+                headers=headers,
+            )
+            self.assertEqual(spoofed.status_code, 400)
+            oversized = self.client.post(
+                path,
+                files={"file": ("large.png", b"x" * (routers_menu.MAX_IMAGE_BYTES + 1), "image/png")},
+                headers=headers,
+            )
+            self.assertEqual(oversized.status_code, 413)
+
+            png = b"\x89PNG\r\n\x1a\n" + b"test-image"
+            uploaded = self.client.post(
+                path,
+                files={"file": ("../../unsafe.jpg", png, "image/png")},
+                headers=headers,
+            )
+            self.assertEqual(uploaded.status_code, 200)
+            image_url = uploaded.json()["image_url"]
+            self.assertTrue(image_url.startswith(f"/static/images/menu/{menu.id}_"))
+            self.assertTrue(image_url.endswith(".png"))
+            saved = Path(directory) / Path(image_url).name
+            self.assertTrue(saved.exists())
+            self.assertEqual(saved.read_bytes(), png)
+            self.assertEqual(len(list(Path(directory).iterdir())), 1)
 
 
 if __name__ == "__main__":

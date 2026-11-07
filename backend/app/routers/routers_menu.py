@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
-import os
 import uuid
 from pathlib import Path
 
@@ -19,6 +17,17 @@ router = APIRouter(prefix="/menu", tags=["menu"])
 # Путь для хранения фото
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "static" / "images" / "menu"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def image_extension(content: bytes) -> str | None:
+    if content.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return ".webp"
+    return None
 
 
 @router.get("/", response_model=List[MenuItemResponse])
@@ -91,31 +100,35 @@ async def upload_menu_image(
         raise HTTPException(status_code=404, detail="Блюдо не найдено")
 
     # Проверяем формат файла
-    allowed = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
+    allowed = {"image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
     if file.content_type not in allowed:
         raise HTTPException(status_code=400, detail="Разрешены только JPEG, PNG, WebP")
 
-    # Генерируем уникальное имя файла
-    ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
-    filename = f"{item_id}_{uuid.uuid4().hex[:8]}{ext}"
+    content = await file.read(MAX_IMAGE_BYTES + 1)
+    if len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Размер изображения не должен превышать 5 МБ")
+    ext = image_extension(content)
+    if ext != allowed[file.content_type]:
+        raise HTTPException(status_code=400, detail="Содержимое файла не соответствует формату изображения")
+
+    # Расширение определяется содержимым, имя отправителя не используется.
+    filename = f"{item_id}_{uuid.uuid4().hex}{ext}"
     filepath = UPLOAD_DIR / filename
+    old_image_url = item.image_url
+    image_url = f"/static/images/menu/{filename}"
+    try:
+        filepath.write_bytes(content)
+        updated = menu_crud.update_menu_item(db, item_id, MenuItemUpdate(image_url=image_url))
+    except Exception:
+        filepath.unlink(missing_ok=True)
+        raise
 
-    # Сохраняем файл
-    content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
-
-    # Удаляем старое фото если оно локальное
-    if item.image_url and item.image_url.startswith("/static/"):
-        old_path = Path(__file__).parent.parent.parent / "static" / item.image_url.lstrip("/static/")
-        if old_path.exists():
+    if old_image_url:
+        old_name = Path(old_image_url).name
+        if old_image_url == f"/static/images/menu/{old_name}":
             try:
-                old_path.unlink()
+                (UPLOAD_DIR / old_name).unlink(missing_ok=True)
             except OSError:
                 pass
 
-    # Обновляем URL изображения
-    image_url = f"/static/images/menu/{filename}"
-    menu_crud.update_menu_item(db, item_id, MenuItemUpdate(image_url=image_url))
-
-    return menu_crud.get_menu_item(db, item_id)
+    return updated

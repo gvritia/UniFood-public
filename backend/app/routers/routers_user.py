@@ -17,6 +17,11 @@ router = APIRouter(
 
 def validate_password_strength(password: str) -> None:
     """Проверка сложности пароля"""
+    if len(password.encode("utf-8")) > 72:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Пароль не должен превышать 72 байта",
+        )
     if len(password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

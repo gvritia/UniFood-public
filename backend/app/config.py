@@ -26,8 +26,8 @@ if DATABASE_URL.get_backend_name() != "postgresql":
     raise RuntimeError("DATABASE_URL must be a PostgreSQL connection URL")
 
 SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY must be set")
+if not SECRET_KEY or len(SECRET_KEY.encode("utf-8")) < 32 or SECRET_KEY.startswith("replace_"):
+    raise RuntimeError("SECRET_KEY must be a random value of at least 32 bytes")
 
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
@@ -6,8 +6,8 @@ from .schemas_menu import MenuItemResponse
 
 
 class CartItemBase(BaseModel):
-    menu_item_id: int
-    quantity: int = 1
+    menu_item_id: int = Field(gt=0)
+    quantity: int = Field(default=1, gt=0, le=99)
 
 
 class CartItemCreate(CartItemBase):
@@ -15,7 +15,7 @@ class CartItemCreate(CartItemBase):
 
 
 class CartItemUpdate(BaseModel):
-    quantity: Optional[int] = None
+    quantity: Optional[int] = Field(default=None, ge=0, le=99)
 
 
 class CartItemResponse(CartItemBase):

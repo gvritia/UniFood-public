@@ -3,9 +3,9 @@ uvicorn[standard]==0.34.0  # Молниеносный ASGI-сервер для �
 sqlalchemy==2.0.38         # Мощный ORM (Object Relational Mapper) для работы с БД
 psycopg2-binary==2.9.10    # Драйвер для подключения к PostgreSQL (используется в продакшене)
 pydantic[email]==2.10.6    # Библиотека для валидации данных и работы с настройками
-python-jose[cryptography]==3.4.0 # Работа с JWT токенами для аутентификации
+PyJWT==2.15.1             # Подпись и проверка JWT
 passlib[bcrypt]==1.7.4     # Библиотека для хеширования паролей (безопасность)
-python-multipart==0.0.20   # Поддержка загрузки файлов и работы с формами
+python-multipart==0.0.31   # Поддержка загрузки файлов и работы с формами
 email-validator==2.2.0     # Проверка корректности email адресов
 bcrypt==4.0.1              # Совместимость с passlib 1.7.4
-python-dotenv==1.0.1       # Загрузка backend/.env при локальном запуске
+python-dotenv==1.2.2       # Загрузка backend/.env при локальном запуске

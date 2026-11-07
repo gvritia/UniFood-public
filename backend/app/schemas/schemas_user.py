@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, model_validator
 from datetime import datetime
 from typing import Optional
 # Pydantic схемы используются для валидации данных
@@ -7,7 +7,7 @@ from typing import Optional
 # Базовая схема пользователя (общие поля)
 class UserBase(BaseModel):
     email: EmailStr  # Валидация email
-    name: str
+    name: str = Field(min_length=1, max_length=100)
 
 
 # Схема для создания пользователя (наследуется от UserBase)
@@ -40,6 +40,13 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     is_admin: Optional[bool] = None
 
+    @model_validator(mode="after")
+    def provided_fields_cannot_be_null(self):
+        for field in ("email", "name", "password", "is_admin"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        return self
+
 
 class ProfileUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -47,6 +54,13 @@ class ProfileUpdate(BaseModel):
     password: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def provided_fields_cannot_be_null(self):
+        for field in ("email", "name", "password"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        return self
 
 
 # Схема для ответа (то, что возвращаем клиенту)
@@ -62,7 +76,7 @@ class UserResponse(UserBase):
 
 # Схема для обновления баланса
 class BalanceUpdate(BaseModel):
-    amount: float  # Сумма для пополнения (положительная) или списания (отрицательная)
+    amount: float = Field(gt=0, le=100000, allow_inf_nan=False)
 
 
 class BalanceResponse(BaseModel):
