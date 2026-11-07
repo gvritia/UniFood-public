@@ -18,7 +18,7 @@ UniFood/
 │   │   ├── config.py    # Конфигурация
 │   │   ├── db.py        # Настройки БД
 │   │   └── main.py      # Точка входа
-│   ├── .env             # Переменные окружения
+│   ├── .env.example     # Пример переменных окружения для локального запуска
 │   └── requirements.txt # Зависимости Python
 │
 └── frontend/
@@ -29,54 +29,21 @@ UniFood/
         │   ├── contexts/    # React Context
         │   ├── pages/       # Страницы
         │   └── App.jsx      # Главный компонент
-        ├── .env             # Переменные окружения
+        ├── Dockerfile       # Сборка фронтенда и Nginx
         └── package.json     # Зависимости Node.js
 ```
 
-## 🚀 Запуск проекта
+## 🚀 Запуск через Docker Compose
 
-### 1. Запуск бэкенда
+1. Скопируйте `.env.example` в `.env` в корне проекта и замените оба значения на собственные случайные строки. Файл `.env` не отправляется в Git.
+2. Запустите `docker compose up --build -d` из корня проекта.
+3. Откройте фронтенд: http://localhost:8080. Документация API доступна по http://localhost:8001/docs.
 
-```bash
-cd c:\Users\muham\UniFood\backend
+PostgreSQL доступен backend внутри сети Compose. Данные БД и загруженные изображения сохраняются в томах Docker при перезапуске контейнеров. Для остановки выполните `docker compose down`; тома при этом сохраняются.
 
-# Установка зависимостей (если еще не установлены)
-py -m pip install -r requirements.txt
+### Запуск без Docker
 
-# Запуск сервера на порту 8001
-py -m uvicorn app.main:app --reload --port 8001
-```
-
-**API документация**: http://localhost:8001/docs
-
-### 2. Запуск фронтенда
-
-```bash
-cd c:\Users\muham\UniFood\frontend\unifood-frontend
-
-# Установка зависимостей (если еще не установлены)
-npm install
-
-# Запуск dev-сервера
-npm run dev
-```
-
-**Фронтенд**: http://localhost:5173 (или 5174)
-
-## 🔧 Конфигурация
-
-### Бэкенд (.env)
-```env
-DATABASE_URL=sqlite:///./unifood.db
-SECRET_KEY=your-secret-key-change-this-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-```
-
-### Фронтенд (.env)
-```env
-VITE_API_URL=http://localhost:8001
-```
+Запустите PostgreSQL и создайте БД `unifood` и пользователя `unifood`. Скопируйте `backend/.env.example` в `backend/.env` и задайте реальные `DATABASE_URL` и `SECRET_KEY`. Из папки `backend` установите зависимости командой `pip install -r requirements.txt`, затем запустите `uvicorn app.main:app --reload --port 8001`. Из папки `frontend/unifood-frontend` выполните `npm ci` и `npm run dev`. Vite проксирует `/api` на локальный backend.
 
 ## 📱 Страницы фронтенда
 
@@ -97,7 +64,7 @@ VITE_API_URL=http://localhost:8001
 - **Pydantic** - валидация данных
 - **JWT (python-jose)** - аутентификация
 - **Passlib** - хеширование паролей
-- **SQLite** - база данных (для разработки)
+- **PostgreSQL** - база данных
 
 ### Фронтенд
 - **React 19** - UI библиотека
@@ -110,10 +77,7 @@ VITE_API_URL=http://localhost:8001
 
 Для заполнения меню тестовыми блюдами:
 
-```bash
-cd c:\Users\muham\UniFood\backend
-py -m app.create_sample_data
-```
+Для тестового меню можно выполнить `docker compose exec backend python -m app.create_sample_data`. Скрипт также создаёт демонстрационного администратора с известным паролем, поэтому используйте его только в локальном окружении.
 
 Будут созданы:
 - Пицца Маргарита, Пицца Пепперони
@@ -125,7 +89,7 @@ py -m app.create_sample_data
 
 ## 🔑 Регистрация и вход
 
-1. Откройте http://localhost:5173/auth/register
+1. Откройте http://localhost:8080/auth/register (или http://localhost:5173/auth/register при запуске Vite)
 2. Введите имя, email и пароль
 3. После регистрации войдите на странице /auth/login
 4. Теперь доступен заказ блюд из меню!
@@ -138,7 +102,7 @@ py -m app.create_sample_data
 
 ### Пользователи
 - `POST /users/` - Регистрация
-- `GET /users/` - Список пользователей (admin)
+- `GET /users/` - Список пользователей
 - `GET /users/{id}` - Информация о пользователе
 - `PUT /users/{id}` - Обновление данных
 - `DELETE /users/{id}` - Удаление
