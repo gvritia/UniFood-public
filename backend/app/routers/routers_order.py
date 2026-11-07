@@ -63,7 +63,9 @@ def change_order_status(
     current_user: UserResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Изменить статус заказа (для демонстрации)"""
+    """Владелец может отменить свой заказ; остальные статусы меняет администратор."""
+    if status_update.status != OrderStatus.CANCELLED:
+        raise HTTPException(status_code=403, detail="Пользователь может только отменить заказ")
     try:
         updated = update_order_status(db, order_id, status_update.status, user_id=current_user.id)
     except ValueError as e:

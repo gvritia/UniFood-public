@@ -18,7 +18,7 @@ def get_my_profile(current_user: UserResponse = Depends(get_current_user)):
 
 @router.put("/me", response_model=UserResponse)
 def update_my_profile(
-        user_update: schemas_user.UserUpdate,
+        user_update: schemas_user.ProfileUpdate,
         current_user: UserResponse = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):

@@ -5,6 +5,8 @@ import re
 from app.crud import crud_user
 from app.schemas import schemas_user
 from app.db import get_db
+from app.dependencies import get_current_admin
+from app.models.models_user import User
 
 # Создаем роутер с префиксом /users
 router = APIRouter(
@@ -43,7 +45,7 @@ def validate_password_strength(password: str) -> None:
 
 
 @router.post("/", response_model=schemas_user.UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user: schemas_user.UserCreate, db: Session = Depends(get_db)):
+def create_user(user: schemas_user.UserRegistration, db: Session = Depends(get_db)):
     """
     Создать нового пользователя.
 
@@ -63,7 +65,9 @@ def create_user(user: schemas_user.UserCreate, db: Session = Depends(get_db)):
         )
 
     # Создаем пользователя
-    return crud_user.user.create_user(db=db, user=user)
+    return crud_user.user.create_user(
+        db=db, user=schemas_user.UserCreate(**user.model_dump(), is_admin=False)
+    )
 
 
 
@@ -72,6 +76,7 @@ def read_users(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
+    _admin: schemas_user.UserResponse = Depends(get_current_admin),
 ):
     """
     Получить список всех пользователей.
@@ -84,7 +89,11 @@ def read_users(
 
 
 @router.get("/{user_id}", response_model=schemas_user.UserResponse)
-def read_user(user_id: int, db: Session = Depends(get_db)):
+def read_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin: schemas_user.UserResponse = Depends(get_current_admin),
+):
     """
     Получить информацию о конкретном пользователе по ID.
     """
@@ -98,7 +107,12 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{user_id}", response_model=schemas_user.UserResponse)
-def update_user(user_id: int, user_update: schemas_user.UserUpdate, db: Session = Depends(get_db)):
+def update_user(
+    user_id: int,
+    user_update: schemas_user.UserUpdate,
+    db: Session = Depends(get_db),
+    _admin: schemas_user.UserResponse = Depends(get_current_admin),
+):
     """
     Обновить данные пользователя.
 
@@ -109,8 +123,7 @@ def update_user(user_id: int, user_update: schemas_user.UserUpdate, db: Session 
         current_user = crud_user.user.get_user(db, user_id)
         if current_user and current_user.is_admin:
             # Проверяем, есть ли другие админы
-            all_users = crud_user.user.get_users(db, skip=0, limit=10000)
-            admin_count = sum(1 for u in all_users if u.is_admin)
+            admin_count = db.query(User).filter(User.is_admin.is_(True)).count()
             if admin_count <= 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -131,10 +144,20 @@ def update_user(user_id: int, user_update: schemas_user.UserUpdate, db: Session 
 
 
 @router.delete("/{user_id}", response_model=schemas_user.UserResponse)
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin: schemas_user.UserResponse = Depends(get_current_admin),
+):
     """
     Удалить пользователя.
     """
+    target = crud_user.user.get_user(db, user_id=user_id)
+    if target and target.is_admin and db.query(User).filter(User.is_admin.is_(True)).count() <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя удалить последнего администратора",
+        )
     db_user = crud_user.user.delete_user(db, user_id=user_id)
     if db_user is None:
         raise HTTPException(

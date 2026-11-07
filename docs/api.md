@@ -14,7 +14,7 @@
 
 | Метод и путь | Доступ | Запрос | Успешный ответ |
 | --- | --- | --- | --- |
-| `POST /users/` | Публичный | `UserCreate` | `201 UserResponse` |
+| `POST /users/` | Публичный | `UserRegistration` | `201 UserResponse` |
 | `POST /auth/login` | Публичный | Форма `username` (email), `password` | `200 TokenResponse` |
 | `GET /auth/me` | Пользователь | — | `200 UserResponse` |
 
@@ -57,7 +57,7 @@ curl.exe -X POST http://localhost:8001/menu/ -H "Authorization: Bearer <JWT>" -H
 | `DELETE /cart/{cart_item_id}` | — | `204`, без тела |
 | `DELETE /cart/` | — | `204`, без тела |
 
-`POST /cart/` увеличивает количество, если блюдо уже находится в корзине. `PATCH` с количеством не больше нуля удаляет позицию; текущая реализация возвращает `200` с `detail` об удалении, а не `CartItemResponse`.
+`POST /cart/` увеличивает количество, если блюдо уже находится в корзине. `PATCH` с количеством не больше нуля удаляет позицию и возвращает `204` без тела. Удаление отдельной позиции доступно только владельцу; для чужой или отсутствующей позиции возвращается `404`.
 
 ## Заказы
 
@@ -68,11 +68,11 @@ curl.exe -X POST http://localhost:8001/menu/ -H "Authorization: Bearer <JWT>" -H
 | `POST /orders/` | Пользователь | Пустое тело; заказ создаётся из текущей корзины | `201 OrderResponse` |
 | `GET /orders/` | Пользователь | — | `200 OrderResponse[]` |
 | `GET /orders/{order_id}` | Владелец | ID в пути | `200 OrderResponse` |
-| `PATCH /orders/{order_id}/status` | Владелец | `{"status":"ready"}` | `200 OrderResponse` |
+| `PATCH /orders/{order_id}/status` | Владелец | `{"status":"cancelled"}` | `200 OrderResponse` |
 | `POST /orders/{order_id}/repeat` | Владелец | ID в пути | `201 OrderResponse` |
 | `POST /orders/guest` | Публичный | `{"items":[{"menu_item_id":1,"quantity":2}],"total":160}` | `200 OrderResponse` |
 
-При оформлении заказа из корзины backend проверяет товары, рассчитывает сумму, проверяет демонстрационный баланс и фиксирует заказ. Гостевой заказ проверяет сумму относительно текущих цен и использует демонстрационную оплату. `POST /orders/{order_id}/repeat` создаёт новый заказ по составу старого, если блюда ещё доступны.
+При оформлении заказа из корзины backend проверяет товары, рассчитывает сумму, проверяет демонстрационный баланс и фиксирует заказ. Гостевой заказ проверяет сумму относительно текущих цен и использует демонстрационную оплату. Владелец может только отменить свой заказ; рабочие статусы меняет администратор. `POST /orders/{order_id}/repeat` создаёт новый заказ по составу старого, если блюда ещё доступны.
 
 ```bash
 curl.exe -X POST http://localhost:8001/cart/ -H "Authorization: Bearer <JWT>" -H "Content-Type: application/json" -d '{"menu_item_id":1,"quantity":2}'
@@ -87,7 +87,7 @@ curl.exe http://localhost:8001/orders/ -H "Authorization: Bearer <JWT>"
 | Метод и путь | Запрос | Успешный ответ |
 | --- | --- | --- |
 | `GET /profile/me` | — | `200 UserResponse` |
-| `PUT /profile/me` | `UserUpdate` | `200 UserResponse` |
+| `PUT /profile/me` | `ProfileUpdate` | `200 UserResponse` |
 | `GET /profile/balance` | — | `200 BalanceResponse`, например `{"balance":500}` |
 | `POST /profile/balance` | `{"amount":500}` (положительное число) | `200 UserResponse` |
 
@@ -100,12 +100,12 @@ curl.exe http://localhost:8001/orders/ -H "Authorization: Bearer <JWT>"
 | `PATCH /admin/orders/{order_id}/status` | Администратор | `{"status":"ready"}` | `200 OrderResponse` |
 | `GET /admin/orders/{order_id}/download` | Администратор | `format=json` или `format=txt` | `200`, файл JSON или TXT |
 | `GET /admin/users` | Администратор | `skip`, `limit`, `sort_by`, `order`, `search` | `200 UserResponse[]` |
-| `GET /users/` | Сейчас публичный | `skip`, `limit` | `200 UserResponse[]` |
-| `GET /users/{user_id}` | Сейчас публичный | ID в пути | `200 UserResponse` |
-| `PUT /users/{user_id}` | Сейчас публичный | `UserUpdate` | `200 UserResponse` |
-| `DELETE /users/{user_id}` | Сейчас публичный | ID в пути | `200 UserResponse` |
+| `GET /users/` | Администратор | `skip`, `limit` | `200 UserResponse[]` |
+| `GET /users/{user_id}` | Администратор | ID в пути | `200 UserResponse` |
+| `PUT /users/{user_id}` | Администратор | `UserUpdate` | `200 UserResponse` |
+| `DELETE /users/{user_id}` | Администратор | ID в пути | `200 UserResponse` |
 
-`AdminStatsResponse` содержит числа пользователей и заказов, общую и сегодняшнюю выручку, а также `orders_by_status`. Маршруты `/users/` для чтения и изменения пользователей в текущей версии открыты без проверки роли; `UserCreate` сейчас принимает `is_admin`. Это ограничение текущей реализации, которое необходимо устранить в пункте об аутентификации и авторизации до открытого развёртывания. Удаление отдельной позиции корзины пока не проверяет её владельца; это также требует исправления.
+`AdminStatsResponse` содержит числа пользователей и заказов, общую и сегодняшнюю выручку, а также `orders_by_status`. Регистрация принимает только email, имя и пароль и всегда создаёт обычного пользователя. Поле `is_admin` может менять только администратор через `PUT /users/{user_id}`; последний администратор не может снять с себя роль или удалить свою запись. `PUT /profile/me` позволяет менять только собственные email, имя и пароль.
 
 ## Служебные маршруты
 

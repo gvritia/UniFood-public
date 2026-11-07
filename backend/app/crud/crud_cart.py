@@ -51,10 +51,11 @@ def update_cart_item(db: Session, cart_item_id: int, update_data: CartItemUpdate
     return db_item
 
 
-def remove_from_cart(db: Session, cart_item_id: int):
-    stmt = delete(CartItem).where(CartItem.id == cart_item_id)
-    db.execute(stmt)
+def remove_from_cart(db: Session, cart_item_id: int, user_id: int) -> bool:
+    stmt = delete(CartItem).where(CartItem.id == cart_item_id, CartItem.user_id == user_id)
+    result = db.execute(stmt)
     db.commit()
+    return result.rowcount > 0
 
 
 def clear_cart(db: Session, user_id: int):

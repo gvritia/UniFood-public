@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -13,7 +13,6 @@ from ..schemas.schemas_cart import (
 )
 from ..crud.crud_cart import (
     get_cart_items,
-    get_cart_item,
     add_to_cart,
     update_cart_item,
     remove_from_cart,
@@ -57,7 +56,11 @@ def add_item_to_cart(
     return created
 
 
-@router.patch("/{cart_item_id}", response_model=CartItemResponse)
+@router.patch(
+    "/{cart_item_id}",
+    response_model=CartItemResponse,
+    responses={204: {"description": "Позиция удалена при количестве не больше нуля"}},
+)
 def update_cart_item_quantity(
         cart_item_id: int,
         update_data: CartItemUpdate,
@@ -78,11 +81,8 @@ def update_cart_item_quantity(
     if update_data.quantity is not None:
         if update_data.quantity <= 0:
             # Если количество стало ≤0 — удаляем позицию
-            remove_from_cart(db, cart_item_id)
-            raise HTTPException(
-                status_code=status.HTTP_200_OK,
-                detail="Позиция удалена (количество ≤ 0)"
-            )
+            remove_from_cart(db, cart_item_id, current_user.id)
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     updated = update_cart_item(db, cart_item_id, update_data)
     if not updated:
@@ -98,8 +98,8 @@ def delete_cart_item(
         db: Session = Depends(get_db)
 ):
     """Удалить позицию из корзины"""
-    # Для безопасности можно проверить принадлежность, но для MVP достаточно
-    remove_from_cart(db, cart_item_id)
+    if not remove_from_cart(db, cart_item_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Позиция не найдена или не принадлежит вам")
     return None
 
 

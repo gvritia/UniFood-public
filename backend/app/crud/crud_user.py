@@ -53,7 +53,7 @@ class CRUDUser:
 
         return db_user
 
-    def update_user(self, db: Session, user_id: int, user_update: schemas_user.UserUpdate):
+    def update_user(self, db: Session, user_id: int, user_update: schemas_user.UserUpdate | schemas_user.ProfileUpdate):
         """Обновить данные пользователя"""
         # Получаем пользователя
         db_user = db.query(models_user.User).filter(models_user.User.id == user_id).with_for_update().first()

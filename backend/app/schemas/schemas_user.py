@@ -27,12 +27,26 @@ class UserCreate(UserBase):
     }
 
 
+class UserRegistration(UserBase):
+    password: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
 # Схема для обновления пользователя (все поля опциональны)
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     name: Optional[str] = None
     password: Optional[str] = None
     is_admin: Optional[bool] = None
+
+
+class ProfileUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    password: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 # Схема для ответа (то, что возвращаем клиенту)

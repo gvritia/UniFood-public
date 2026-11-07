@@ -100,5 +100,9 @@ PostgreSQL доступен backend внутри сети Compose. Данные 
 
 Маршруты, схемы, права доступа и примеры запросов описаны в [документации API](docs/api.md). Интерактивная OpenAPI-документация после запуска backend доступна по http://localhost:8001/docs, машинная схема — по http://localhost:8001/openapi.json.
 
+### Проверка авторизации
+
+Из папки `backend` установите тестовые зависимости командой `pip install -r requirements-dev.txt` и запустите `python -m unittest discover -s tests -p test_authorization.py`. Тесты используют отдельную БД SQLite в памяти и не меняют данные PostgreSQL.
+
 ## 👥 Авторы
 UniFood Team - 2026
