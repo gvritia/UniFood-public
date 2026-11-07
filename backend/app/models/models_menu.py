@@ -16,7 +16,7 @@ class Menu(Base):
     description = Column(String(1000), nullable=True)
     image_url = Column(String(300), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow())
+    updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
     calories = Column(Integer, nullable=True)
 
     def __repr__(self):
