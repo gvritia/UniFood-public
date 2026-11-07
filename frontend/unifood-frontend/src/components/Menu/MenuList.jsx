@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../api/axios';
 import DishModal from './DishModal';
 import './MenuList.scss';
 
@@ -11,7 +11,7 @@ const MenuList = () => {
     useEffect(() => {
         const fetchMenu = async () => {
             try {
-                const response = await axios.get('http://localhost:8001/menu/');
+                const response = await api.get('/menu/');
                 setDishes(response.data);
             } catch (error) {
                 console.error("Ошибка загрузки меню:", error);
@@ -24,12 +24,7 @@ const MenuList = () => {
 
     const handleAddToCart = async (dish, quantity) => {
         try {
-            const token = localStorage.getItem('token');
-            await axios.post(
-                'http://localhost:8001/cart/',
-                { menu_item_id: dish.id, quantity: quantity },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await api.post('/cart/', { menu_item_id: dish.id, quantity: quantity });
             alert(`${dish.food_name} добавлен в корзину!`);
         } catch (error) {
             console.error("Ошибка добавления в корзину:", error);

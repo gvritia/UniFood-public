@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: unifood
+      POSTGRES_USER: unifood
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      POSTGRES_DB: unifood
+      POSTGRES_USER: unifood
+      POSTGRES_HOST: db
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY:?Create .env from .env.example}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - menu_images:/app/static/images/menu
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build: ./frontend/unifood-frontend
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  menu_images:

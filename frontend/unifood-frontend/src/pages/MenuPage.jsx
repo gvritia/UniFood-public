@@ -33,7 +33,7 @@ const MenuPage = () => {
   const getImageUrl = (image_url) => {
     if (!image_url) return 'https://via.placeholder.com/400x300?text=No+Image';
     if (image_url.startsWith('http')) return image_url;
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+    const API_URL = import.meta.env.VITE_API_URL || '/api';
     return `${API_URL}${image_url}`;
   };
 

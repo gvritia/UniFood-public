@@ -72,7 +72,7 @@ def create_order_from_cart(db: Session, user_id: int) -> Order:
     db.add(new_order)
 
     # Очистка корзины ПЕРЕД коммитом. 
-    # Используем синхронизацию session=False, чтобы SQLite не ругался на активные объекты.
+    # Не синхронизируем уже загруженные объекты: после коммита сессия обновится.
     db.query(CartItem).filter(CartItem.user_id == user_id).delete(synchronize_session=False)
 
     try:

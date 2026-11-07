@@ -144,7 +144,7 @@ const AdminPage = () => {
       try {
         const formData = new FormData();
         formData.append('file', file);
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
         const token = localStorage.getItem('token');
         const resp = await fetch(`${API_URL}/menu/${id}/image`, {
           method: 'POST',
