@@ -4,7 +4,7 @@ from app.crud import crud_user
 from app.schemas import schemas_user
 from app.db import get_db
 from ..api.auth import get_current_user
-from ..schemas.schemas_user import UserResponse, BalanceUpdate
+from ..schemas.schemas_user import UserResponse, BalanceUpdate, BalanceResponse
 from .routers_user import validate_password_strength
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -57,7 +57,7 @@ def add_balance(
     return updated_user
 
 
-@router.get("/balance", response_model=dict)
+@router.get("/balance", response_model=BalanceResponse)
 def get_balance(
         current_user: UserResponse = Depends(get_current_user)
 ):

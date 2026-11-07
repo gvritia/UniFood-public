@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from ..crud.crud_user import user as crud_user
 from ..db import get_db
-from ..schemas.schemas_user import UserResponse
+from ..schemas.schemas_user import TokenResponse, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -54,7 +54,7 @@ async def get_current_user(
     return UserResponse.model_validate(user)
 
 
-@router.post("/login", response_model=dict)
+@router.post("/login", response_model=TokenResponse, summary="Войти и получить JWT")
 async def login_for_access_token(
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         db: Session = Depends(get_db)

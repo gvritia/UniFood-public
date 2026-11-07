@@ -96,38 +96,9 @@ PostgreSQL доступен backend внутри сети Compose. Данные 
 3. После регистрации войдите на странице /auth/login
 4. Теперь доступен заказ блюд из меню!
 
-## 📝 API Endpoints
+## 📝 REST API
 
-### Авторизация
-- `POST /auth/login` - Вход (email + password)
-- `GET /auth/me` - Получение текущего пользователя
-
-### Пользователи
-- `POST /users/` - Регистрация
-- `GET /users/` - Список пользователей
-- `GET /users/{id}` - Информация о пользователе
-- `PUT /users/{id}` - Обновление данных
-- `DELETE /users/{id}` - Удаление
-
-### Меню
-- `GET /menu/` - Получить меню (с фильтрами)
-- `GET /menu/{id}` - Получить блюдо
-- `POST /menu/` - Добавить блюдо (admin)
-- `PUT /menu/{id}` - Обновить блюдо (admin)
-- `DELETE /menu/{id}` - Удалить блюдо (admin)
-
-### Корзина
-- `GET /cart/` - Получить корзину
-- `POST /cart/` - Добавить в корзину
-- `PATCH /cart/{id}` - Обновить количество
-- `DELETE /cart/{id}` - Удалить позицию
-- `DELETE /cart/` - Очистить корзину
-
-### Заказы
-- `POST /orders/` - Создать заказ
-- `GET /orders/` - История заказов
-- `GET /orders/{id}` - Детали заказа
-- `PATCH /orders/{id}/status` - Изменить статус
+Маршруты, схемы, права доступа и примеры запросов описаны в [документации API](docs/api.md). Интерактивная OpenAPI-документация после запуска backend доступна по http://localhost:8001/docs, машинная схема — по http://localhost:8001/openapi.json.
 
 ## 👥 Авторы
 UniFood Team - 2026

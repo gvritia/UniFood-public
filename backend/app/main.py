@@ -27,8 +27,22 @@ Base.metadata.create_all(bind=engine)
 # Создаем экземпляр FastAPI
 app = FastAPI(
     title="UniFood API",
-    description="MVP онлайн-заказ еды в столовой вуза",
-    version="1.0"
+    description=(
+        "REST API для меню, корзины и заказов UniFood. "
+        "Защищённые методы принимают `Authorization: Bearer <JWT>`. "
+        "Форма входа использует email в поле `username`. "
+        "Подробные сценарии и примеры запросов находятся в `docs/api.md` репозитория."
+    ),
+    version="1.0",
+    openapi_tags=[
+        {"name": "auth", "description": "Вход и данные текущего пользователя"},
+        {"name": "users", "description": "Регистрация и пользовательские записи"},
+        {"name": "menu", "description": "Каталог блюд и управление меню"},
+        {"name": "cart", "description": "Корзина текущего пользователя"},
+        {"name": "orders", "description": "Оформление и история заказов"},
+        {"name": "profile", "description": "Профиль и демонстрационный баланс"},
+        {"name": "admin", "description": "Статистика и управление для администратора"},
+    ],
 )
 
 # CORS для фронтенда (React)

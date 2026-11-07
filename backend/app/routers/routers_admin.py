@@ -9,6 +9,7 @@ from ..db import get_db
 from ..dependencies import get_current_admin
 from ..schemas.schemas_user import UserResponse
 from ..schemas.schemas_order import OrderResponse, OrderStatusUpdate, OrderStatus
+from ..schemas.schemas_admin import AdminStatsResponse
 from ..crud.crud_order import update_order_status
 from ..models.models_order import Order
 from ..models.models_user import User
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 # ====================== СТАТИСТИКА ======================
-@router.get("/stats")
+@router.get("/stats", response_model=AdminStatsResponse)
 def get_admin_stats(
     db: Session = Depends(get_db),
     current_admin: UserResponse = Depends(get_current_admin),

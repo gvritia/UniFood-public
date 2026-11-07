@@ -49,3 +49,13 @@ class UserResponse(UserBase):
 # Схема для обновления баланса
 class BalanceUpdate(BaseModel):
     amount: float  # Сумма для пополнения (положительная) или списания (отрицательная)
+
+
+class BalanceResponse(BaseModel):
+    balance: float
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
