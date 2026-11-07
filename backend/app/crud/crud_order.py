@@ -1,15 +1,14 @@
 from sqlalchemy.orm import Session, selectinload
-from datetime import datetime, timezone
 from app.models.models_order import Order, OrderItem, OrderStatus
 from app.models.models_cart import CartItem
 from app.models.models_user import User
-from app.services.iiko_stub import iiko_stub
+from app.services.order_number import new_order_number
 from app.exceptions import CartEmptyException, InsufficientBalanceException
 
 
 def create_order_from_cart(db: Session, user_id: int) -> Order:
     """Создать заказ из корзины авторизованного пользователя"""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
     if not user:
         raise ValueError("Пользователь не найден")
 
@@ -25,6 +24,9 @@ def create_order_from_cart(db: Session, user_id: int) -> Order:
     if not cart_items:
         raise CartEmptyException()
 
+    if any(ci.quantity <= 0 or ci.menu_item is None for ci in cart_items):
+        raise ValueError("Корзина содержит недоступные или некорректные позиции")
+
     total_price = sum(ci.quantity * (ci.menu_item.price if ci.menu_item else 0) for ci in cart_items)
     total_price = round(total_price, 2)
 
@@ -35,30 +37,12 @@ def create_order_from_cart(db: Session, user_id: int) -> Order:
     # Уменьшаем баланс (округляем до 2 знаков)
     user.balance = round(user.balance - total_price, 2)
 
-    # Формируем данные для внешней системы (stub)
-    items_data = [
-        {
-            "menu_item_id": ci.menu_item_id,
-            "name": ci.menu_item.food_name if ci.menu_item else "Unknown",
-            "quantity": ci.quantity,
-            "price": ci.menu_item.price if ci.menu_item else 0
-        }
-        for ci in cart_items
-    ]
-
-    order_number = iiko_stub.send_order({
-        "user_id": user_id,
-        "total": total_price,
-        "items": items_data,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-
     # Создаём заказ
     new_order = Order(
         user_id=user_id,
         total_price=total_price,
         status=OrderStatus.NEW,
-        order_number=order_number
+        order_number=new_order_number()
     )
     
     # Добавляем позиции заказа, НЕ используя flush() раньше времени
@@ -105,9 +89,12 @@ def get_order(db: Session, order_id: int, user_id: int) -> Order | None:
     )
 
 
-def update_order_status(db: Session, order_id: int, new_status: OrderStatus) -> Order | None:
+def update_order_status(db: Session, order_id: int, new_status: OrderStatus, user_id: int | None = None) -> Order | None:
     """Изменить статус заказа с возвратом денег при отмене и блокировкой после 'выдан'"""
-    order = db.query(Order).filter(Order.id == order_id).first()
+    query = db.query(Order).filter(Order.id == order_id)
+    if user_id is not None:
+        query = query.filter(Order.user_id == user_id)
+    order = query.with_for_update().first()
     if not order:
         return None
 
@@ -121,7 +108,7 @@ def update_order_status(db: Session, order_id: int, new_status: OrderStatus) -> 
     if new_status == OrderStatus.CANCELLED and order.status != OrderStatus.CANCELLED:
         # Заказ переходит в "отменён" — возвращаем деньги
         if order.user_id is not None:
-            user = db.query(User).filter(User.id == order.user_id).first()
+            user = db.query(User).filter(User.id == order.user_id).with_for_update().first()
             if user:
                 user.balance = round(user.balance + order.total_price, 2)
 

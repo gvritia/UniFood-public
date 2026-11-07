@@ -1,21 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
-from datetime import datetime, timezone
+from typing import List
 
 from ..db import get_db
 from ..api.auth import get_current_user
 from ..schemas.schemas_user import UserResponse
-from ..schemas.schemas_order import OrderResponse, OrderStatusUpdate
-from ..schemas.schemas_cart import CartItemCreate
+from ..schemas.schemas_order import GuestOrderCreate, OrderResponse, OrderStatusUpdate
 from ..crud.crud_order import create_order_from_cart, get_user_orders, get_order, update_order_status
-from ..crud.crud_cart import add_to_cart, clear_cart
 from ..crud.crud_menu import menu_crud
 from ..services.payment_stub import payment_stub
-from ..services.iiko_stub import iiko_stub
+from ..services.order_number import new_order_number
 from ..services.order_tasks import change_order_status_after_delay
 from ..models.models_order import Order, OrderItem, OrderStatus
-from app.exceptions import CartEmptyException, InsufficientBalanceException
+from ..models.models_cart import CartItem
 
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -23,25 +20,19 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 
 @router.post("/", response_model=OrderResponse, status_code=201)
 def create_order(
-    background_tasks: BackgroundTasks,          # ← добавлено
+    background_tasks: BackgroundTasks,
     current_user: UserResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Создать заказ из текущей корзины"""
     try:
         order = create_order_from_cart(db, current_user.id)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        # Автоматическая смена статуса в фоне
-        background_tasks.add_task(change_order_status_after_delay, order.id, delay_seconds=40)
-
-        return order
-    except (CartEmptyException, InsufficientBalanceException) as e:
-        raise e
-    except Exception as e:
-        import traceback
-        print(f"ERROR creating order: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=f"Ошибка при создании заказа: {str(e)}")
+    background_tasks.add_task(change_order_status_after_delay, order.id, delay_seconds=40)
+    return order
 
 
 @router.get("/", response_model=List[OrderResponse])
@@ -74,87 +65,55 @@ def change_order_status(
 ):
     """Изменить статус заказа (для демонстрации)"""
     try:
-        updated = update_order_status(db, order_id, status_update.status)
+        updated = update_order_status(db, order_id, status_update.status, user_id=current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not updated:
         raise HTTPException(status_code=404, detail="Заказ не найден")
-    if updated.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Нет доступа")
     return updated
 
 
 @router.post("/guest", response_model=OrderResponse)
 def create_guest_order(
-    order_data: Dict[str, Any],
+    order_data: GuestOrderCreate,
     db: Session = Depends(get_db)
 ):
     """Создание заказа для гостя (без авторизации)"""
-    if "items" not in order_data or "total" not in order_data:
-        raise HTTPException(status_code=400, detail="Требуются поля 'items' и 'total'")
-
-    items = order_data["items"]
-    if not isinstance(items, list) or not items:
-        raise HTTPException(status_code=400, detail="Поле 'items' должно быть непустым списком")
-
     total = 0.0
-    items_data = []
-
-    for it in items:
-        if "menu_item_id" not in it or "quantity" not in it:
-            raise HTTPException(status_code=400, detail="Каждый item должен содержать menu_item_id и quantity")
-
-        menu_item = menu_crud.get_menu_item(db, it["menu_item_id"])
-        if not menu_item:
-            raise HTTPException(status_code=400, detail=f"Товар с id {it['menu_item_id']} не найден")
-
-        item_total = menu_item.price * it["quantity"]
-        total += item_total
-
-        items_data.append({
-            "menu_item_id": it["menu_item_id"],
-            "name": menu_item.food_name,
-            "quantity": it["quantity"],
-            "price": menu_item.price
-        })
-
-    if abs(total - float(order_data["total"])) > 0.01:
-        raise HTTPException(status_code=400, detail="Сумма не совпадает с расчётом на сервере")
-
-    # Имитация оплаты и отправки в iiko
-    payment_stub.process_payment({"total": total})
-
-    stub_data = {
-        "user_id": None,
-        "total": total,
-        "items": items_data,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    order_number = iiko_stub.send_order(stub_data)
 
     new_order = Order(
         user_id=None,
-        total_price=total,
         status=OrderStatus.NEW,
-        order_number=order_number
+        order_number=new_order_number(),
     )
-    
-    # Добавляем позиции через коллекцию, чтобы SQLAlchemy сам всё разрулил
-    for it in items:
-        menu_item = menu_crud.get_menu_item(db, it["menu_item_id"])
+
+    for item in order_data.items:
+        menu_item = menu_crud.get_menu_item(db, item.menu_item_id)
+        if not menu_item:
+            raise HTTPException(status_code=400, detail=f"Товар с id {item.menu_item_id} не найден")
+
+        total += menu_item.price * item.quantity
         new_order.items.append(OrderItem(
-            menu_item_id=it["menu_item_id"],
-            quantity=it["quantity"],
-            price_at_order=menu_item.price
+            menu_item_id=item.menu_item_id,
+            quantity=item.quantity,
+            price_at_order=menu_item.price,
         ))
+
+    total = round(total, 2)
+    if abs(total - order_data.total) > 0.01:
+        raise HTTPException(status_code=400, detail="Сумма не совпадает с расчётом на сервере")
+
+    # Демонстрационная оплата; реальный платёжный провайдер не подключён.
+    payment_stub.process_payment({"total": total})
+    new_order.total_price = total
 
     db.add(new_order)
     
     try:
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
 
     db.refresh(new_order)
     return new_order
@@ -175,17 +134,20 @@ def repeat_order(
     if not order.items:
         raise HTTPException(status_code=400, detail="В заказе нет товаров")
 
-    # Очищаем текущую корзину и добавляем товары из прошлого заказа
-    clear_cart(db, current_user.id)
+    if any(item.menu_item is None or item.menu_item_id is None for item in order.items):
+        raise HTTPException(status_code=400, detail="Один из товаров прошлого заказа больше недоступен")
 
-    for item in order.items:
-        add_to_cart(db, current_user.id, CartItemCreate(
-            menu_item_id=item.menu_item_id,
-            quantity=item.quantity
-        ))
-
-    # Создаём новый заказ
-    new_order = create_order_from_cart(db, current_user.id)
+    try:
+        db.query(CartItem).filter(CartItem.user_id == current_user.id).delete(synchronize_session=False)
+        db.add_all(
+            CartItem(user_id=current_user.id, menu_item_id=item.menu_item_id, quantity=item.quantity)
+            for item in order.items
+        )
+        db.flush()
+        new_order = create_order_from_cart(db, current_user.id)
+    except Exception:
+        db.rollback()
+        raise
 
     # Запускаем автоматическую смену статуса
     background_tasks.add_task(change_order_status_after_delay, new_order.id, delay_seconds=40)

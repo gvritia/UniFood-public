@@ -20,7 +20,7 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     total_price = Column(Float, nullable=False)
     status = Column(Enum(OrderStatus), default=OrderStatus.NEW, nullable=False)
-    order_number = Column(String(20), unique=True, nullable=False)  # от stub iiko
+    order_number = Column(String(20), unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
 

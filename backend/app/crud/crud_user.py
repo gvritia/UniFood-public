@@ -56,7 +56,7 @@ class CRUDUser:
     def update_user(self, db: Session, user_id: int, user_update: schemas_user.UserUpdate):
         """Обновить данные пользователя"""
         # Получаем пользователя
-        db_user = self.get_user(db, user_id)
+        db_user = db.query(models_user.User).filter(models_user.User.id == user_id).with_for_update().first()
         if not db_user:
             return None
 
@@ -88,7 +88,7 @@ class CRUDUser:
 
     def update_balance(self, db: Session, user_id: int, amount: float):
         """Обновить баланс пользователя (пополнение или списание)"""
-        db_user = self.get_user(db, user_id)
+        db_user = db.query(models_user.User).filter(models_user.User.id == user_id).with_for_update().first()
         if not db_user:
             return None
 

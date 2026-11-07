@@ -14,7 +14,7 @@ UniFood/
 │   │   ├── models/      # SQLAlchemy модели
 │   │   ├── routers/     # API роутеры
 │   │   ├── schemas/     # Pydantic схемы
-│   │   ├── services/    # Сервисы (payment, iiko stubs)
+│   │   ├── services/    # Номера заказов и демонстрационная оплата
 │   │   ├── config.py    # Конфигурация
 │   │   ├── db.py        # Настройки БД
 │   │   └── main.py      # Точка входа

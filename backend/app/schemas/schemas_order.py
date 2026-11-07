@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import List, Optional
 from enum import Enum
@@ -34,11 +34,6 @@ class OrderBase(BaseModel):
     order_number: str
 
 
-class OrderCreate(BaseModel):
-    # для создания — данные приходят из корзины + оплата
-    pass  # в MVP будем создавать внутри сервиса
-
-
 class OrderResponse(OrderBase):
     id: int
     user_id: Optional[int] = None
@@ -52,3 +47,13 @@ class OrderResponse(OrderBase):
 
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
+
+
+class GuestOrderItem(BaseModel):
+    menu_item_id: int
+    quantity: int = Field(gt=0)
+
+
+class GuestOrderCreate(BaseModel):
+    items: List[GuestOrderItem] = Field(min_length=1)
+    total: float = Field(ge=0)
