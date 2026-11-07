@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container, Card, CardContent, CardActions,
@@ -16,7 +16,6 @@ import { useAuth } from '../contexts/auth-context';
 
 const MenuPage = () => {
   const [allItems, setAllItems] = useState([]);
-  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
@@ -26,6 +25,10 @@ const MenuPage = () => {
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' });
 
   const { addToCart, cartItems, updateQuantity, removeItem } = useCart();
+  const cartByMenuId = useMemo(
+    () => new Map((cartItems || []).map(item => [item.menu_item_id, item])),
+    [cartItems]
+  );
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
@@ -42,7 +45,7 @@ const MenuPage = () => {
     fetchMenu();
   }, []);
 
-  const filterItems = useCallback(() => {
+  const items = useMemo(() => {
     let filtered = allItems;
     if (selectedCategory !== 'Все') {
       filtered = filtered.filter(item =>
@@ -58,12 +61,8 @@ const MenuPage = () => {
         item.category?.toLowerCase().includes(query)
       );
     }
-    setItems(filtered);
+    return filtered;
   }, [allItems, search, selectedCategory]);
-
-  useEffect(() => {
-    filterItems();
-  }, [search, selectedCategory, allItems, filterItems]);
 
   const fetchMenu = async () => {
     setLoading(true);
@@ -71,7 +70,6 @@ const MenuPage = () => {
     try {
       const response = await menuApi.getMenu({});
       setAllItems(response || []);
-      setItems(response || []);
     } catch (error) {
       console.error('Ошибка при загрузке меню:', error);
       setLoadError(true);
@@ -87,7 +85,7 @@ const MenuPage = () => {
     }
 
     try {
-      const existingItem = cartItems?.find(ci => ci.menu_item_id === selectedDish.id);
+      const existingItem = cartByMenuId.get(selectedDish.id);
       if (existingItem) {
         await updateQuantity(existingItem.id, quantity);
       } else {
@@ -106,7 +104,7 @@ const MenuPage = () => {
 
   const openDishModal = (dish) => {
     setSelectedDish(dish);
-    const existingItem = cartItems?.find(ci => ci.menu_item_id === dish.id);
+    const existingItem = cartByMenuId.get(dish.id);
     setQuantity(existingItem ? existingItem.quantity : 1);
   };
 
@@ -194,7 +192,7 @@ const MenuPage = () => {
           }}
         >
           {items.map((item) => {
-            const cartItem = cartItems?.find(ci => ci.menu_item_id === item.id);
+            const cartItem = cartByMenuId.get(item.id);
             const cartQuantity = cartItem ? cartItem.quantity : 0;
 
             return (
@@ -221,6 +219,8 @@ const MenuPage = () => {
                   <img
                     src={getImageUrl(item.image_url)}
                     alt={item.food_name}
+                    loading="lazy"
+                    decoding="async"
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
                   {cartQuantity > 0 && (
@@ -394,7 +394,7 @@ const MenuPage = () => {
                   fullWidth
                   sx={{ borderRadius: 3, fontWeight: '900', textTransform: 'none', mt: 1 }}
                 >
-                  {!isAuthenticated ? 'Войти, чтобы добавить в корзину' : cartItems?.find(ci => ci.menu_item_id === selectedDish.id)
+                  {!isAuthenticated ? 'Войти, чтобы добавить в корзину' : cartByMenuId.has(selectedDish.id)
                     ? `Обновить (${quantity} шт.)`
                     : `В корзину (${quantity} шт.)`}
                 </Button>

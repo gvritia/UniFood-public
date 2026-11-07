@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, Box, CircularProgress } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -9,16 +9,17 @@ import { CartProvider } from './contexts/CartContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 
-import HomePage from './pages/HomePage';
-import MenuPage from './pages/MenuPage';
-import CartPage from './pages/CartPage';
-import OrdersPage from './pages/OrdersPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage';
-import AdminPage from './pages/AdminPage';
 import AdminRoute from './components/AdminRoute';
 import { useAuth } from './contexts/auth-context';
+
+const HomePage = lazy(() => import('./pages/HomePage'));
+const MenuPage = lazy(() => import('./pages/MenuPage'));
+const CartPage = lazy(() => import('./pages/CartPage'));
+const OrdersPage = lazy(() => import('./pages/OrdersPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
 
 // Создаем тему Material-UI
 const theme = createTheme({
@@ -91,7 +92,8 @@ function App() {
         <AuthProvider>
           <CartProvider>
             <BoxWrapper>
-              <Routes>
+              <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress aria-label="Загрузка страницы" /></Box>}>
+                <Routes>
                 {/* Публичные маршруты */}
                 <Route path="/" element={<HomePage />} />
                 <Route path="/menu" element={<MenuPage />} />
@@ -136,7 +138,8 @@ function App() {
 
                 {/* Перенаправление для неизвестных маршрутов */}
                 <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+                </Routes>
+              </Suspense>
             </BoxWrapper>
           </CartProvider>
         </AuthProvider>
