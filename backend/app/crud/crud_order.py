@@ -6,6 +6,23 @@ from app.services.order_number import new_order_number
 from app.exceptions import CartEmptyException, InsufficientBalanceException
 
 
+ORDER_RESPONSE_OPTIONS = (
+    selectinload(Order.items).selectinload(OrderItem.menu_item),
+    selectinload(Order.user),
+)
+
+
+def load_order_for_response(db: Session, order_id: int) -> Order:
+    """Load the full response graph in a bounded number of queries."""
+    return (
+        db.query(Order)
+        .options(*ORDER_RESPONSE_OPTIONS)
+        .populate_existing()
+        .filter(Order.id == order_id)
+        .one()
+    )
+
+
 def create_order_from_cart(db: Session, user_id: int) -> Order:
     """Создать заказ из корзины авторизованного пользователя"""
     user = db.query(User).filter(User.id == user_id).with_for_update().first()
@@ -65,8 +82,7 @@ def create_order_from_cart(db: Session, user_id: int) -> Order:
         db.rollback()
         raise e
 
-    db.refresh(new_order)
-    return new_order
+    return load_order_for_response(db, new_order.id)
 
 
 def get_user_orders(db: Session, user_id: int):
@@ -74,6 +90,7 @@ def get_user_orders(db: Session, user_id: int):
     return (
         db.query(Order)
         .filter(Order.user_id == user_id)
+        .options(*ORDER_RESPONSE_OPTIONS)
         .order_by(Order.created_at.desc())
         .all()
     )
@@ -84,7 +101,7 @@ def get_order(db: Session, order_id: int, user_id: int) -> Order | None:
     return (
         db.query(Order)
         .filter(Order.id == order_id, Order.user_id == user_id)
-        .options(selectinload(Order.items).selectinload(OrderItem.menu_item))
+        .options(*ORDER_RESPONSE_OPTIONS)
         .first()
     )
 
@@ -114,5 +131,4 @@ def update_order_status(db: Session, order_id: int, new_status: OrderStatus, use
 
     order.status = new_status
     db.commit()
-    db.refresh(order)
-    return order
+    return load_order_for_response(db, order.id)

@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -23,9 +23,10 @@ with patch.object(Base.metadata, "create_all"):
 from app.api.auth import create_access_token  # noqa: E402
 from app.models.models_cart import CartItem  # noqa: E402
 from app.models.models_menu import Menu  # noqa: E402
-from app.models.models_order import Order, OrderStatus  # noqa: E402
+from app.models.models_order import Order, OrderItem, OrderStatus  # noqa: E402
 from app.models.models_user import User  # noqa: E402
 from app.routers import routers_menu  # noqa: E402
+from app.services.menu_cache import MenuCache, menu_cache  # noqa: E402
 
 logging.getLogger("app.main").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -33,6 +34,7 @@ logging.getLogger("httpx").setLevel(logging.ERROR)
 
 class AuthorizationTests(unittest.TestCase):
     def setUp(self):
+        menu_cache.invalidate()
         self.engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -55,6 +57,7 @@ class AuthorizationTests(unittest.TestCase):
         self.db.commit()
 
     def tearDown(self):
+        menu_cache.invalidate()
         self.db.close()
         self.client.close()
         app.dependency_overrides.clear()
@@ -274,6 +277,113 @@ class AuthorizationTests(unittest.TestCase):
             self.assertTrue(saved.exists())
             self.assertEqual(saved.read_bytes(), png)
             self.assertEqual(len(list(Path(directory).iterdir())), 1)
+
+    def test_menu_cache_hits_and_invalidates_after_changes(self):
+        first = self.client.get("/menu/")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.headers["x-menu-cache"], "MISS")
+        self.assertEqual(self.client.get("/menu/").headers["x-menu-cache"], "HIT")
+
+        created = self.client.post(
+            "/menu/",
+            json={"food_name": "Soup", "price": 120, "category": "Lunch"},
+            headers=self.auth(self.admin),
+        )
+        self.assertEqual(created.status_code, 201)
+        item_id = created.json()["id"]
+        after_create = self.client.get("/menu/")
+        self.assertEqual(after_create.headers["x-menu-cache"], "MISS")
+        self.assertEqual(after_create.json()[0]["food_name"], "Soup")
+
+        updated = self.client.put(
+            f"/menu/{item_id}", json={"food_name": "New soup"}, headers=self.auth(self.admin)
+        )
+        self.assertEqual(updated.status_code, 200)
+        after_update = self.client.get("/menu/")
+        self.assertEqual(after_update.headers["x-menu-cache"], "MISS")
+        self.assertEqual(after_update.json()[0]["food_name"], "New soup")
+
+        deleted = self.client.delete(f"/menu/{item_id}", headers=self.auth(self.admin))
+        self.assertEqual(deleted.status_code, 204)
+        after_delete = self.client.get("/menu/")
+        self.assertEqual(after_delete.headers["x-menu-cache"], "MISS")
+        self.assertEqual(after_delete.json(), [])
+
+        self.assertEqual(self.client.get("/menu/?limit=101").status_code, 422)
+        self.assertEqual(self.client.get("/menu/?skip=-1").status_code, 422)
+
+    def test_order_history_uses_bounded_queries(self):
+        meals = [Menu(food_name=f"Meal {i}", price=100, category="Test") for i in range(5)]
+        self.db.add_all(meals)
+        self.db.flush()
+        for i, meal in enumerate(meals):
+            order = Order(user_id=self.alice.id, total_price=100, status=OrderStatus.NEW, order_number=f"PERF-{i}")
+            order.items.append(OrderItem(menu_item_id=meal.id, quantity=1, price_at_order=100))
+            self.db.add(order)
+        self.db.commit()
+        headers = self.auth(self.alice)
+
+        selects = []
+
+        def record_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                selects.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record_select)
+        try:
+            response = self.client.get("/orders/", headers=headers)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record_select)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 5)
+        self.assertLessEqual(len(selects), 5, selects)
+
+    def test_guest_order_batches_menu_lookups(self):
+        meals = [Menu(food_name=f"Meal {i}", price=100, category="Test") for i in range(5)]
+        self.db.add_all(meals)
+        self.db.commit()
+        meal_ids = [meal.id for meal in meals]
+
+        menu_selects = []
+
+        def record_menu_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+            if statement.lstrip().upper().startswith("SELECT") and "FROM menu" in statement:
+                menu_selects.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record_menu_select)
+        try:
+            with patch("app.routers.routers_order.payment_stub.process_payment"):
+                response = self.client.post(
+                    "/orders/guest",
+                    json={
+                        "items": [{"menu_item_id": item_id, "quantity": 1} for item_id in meal_ids],
+                        "total": 500,
+                    },
+                )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record_menu_select)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["items"]), 5)
+        self.assertLessEqual(len(menu_selects), 2, menu_selects)
+
+
+class MenuCacheTests(unittest.TestCase):
+    def test_ttl_and_size_limit(self):
+        cache = MenuCache(ttl_seconds=1, max_entries=1)
+        loads = []
+
+        def load():
+            loads.append(1)
+            return [len(loads)]
+
+        with patch("app.services.menu_cache.monotonic", return_value=0):
+            self.assertEqual(cache.get_or_load("one", load), ((1,), False))
+        with patch("app.services.menu_cache.monotonic", return_value=0.5):
+            self.assertEqual(cache.get_or_load("one", load), ((1,), True))
+        with patch("app.services.menu_cache.monotonic", return_value=1.1):
+            self.assertEqual(cache.get_or_load("one", load), ((2,), False))
+            self.assertEqual(cache.get_or_load("two", load), ((3,), False))
+            self.assertEqual(cache.get_or_load("one", load), ((4,), False))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.models_menu import Menu
 from app.schemas.schemas_menu import MenuItemCreate, MenuItemUpdate
+from app.services.menu_cache import menu_cache
 
 
 class CRUDMenu:
@@ -24,12 +25,13 @@ class CRUDMenu:
         if q:
             query = query.filter(Menu.food_name.ilike(f"%{q}%"))
 
-        return query.offset(skip).limit(limit).all()
+        return query.order_by(Menu.id).offset(skip).limit(limit).all()
 
     def create_menu_item(self, db: Session, item: MenuItemCreate) -> Menu:
         db_item = Menu(**item.model_dump())
         db.add(db_item)
         db.commit()
+        menu_cache.invalidate()
         db.refresh(db_item)
         return db_item
 
@@ -45,6 +47,7 @@ class CRUDMenu:
             setattr(db_item, key, value)
 
         db.commit()
+        menu_cache.invalidate()
         db.refresh(db_item)
         return db_item
 
@@ -54,6 +57,7 @@ class CRUDMenu:
             return None
         db.delete(db_item)
         db.commit()
+        menu_cache.invalidate()
         return db_item
 
 

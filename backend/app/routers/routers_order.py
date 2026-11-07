@@ -6,13 +6,13 @@ from ..db import get_db
 from ..api.auth import get_current_user
 from ..schemas.schemas_user import UserResponse
 from ..schemas.schemas_order import GuestOrderCreate, OrderResponse, OrderStatusUpdate
-from ..crud.crud_order import create_order_from_cart, get_user_orders, get_order, update_order_status
-from ..crud.crud_menu import menu_crud
+from ..crud.crud_order import create_order_from_cart, get_user_orders, get_order, load_order_for_response, update_order_status
 from ..services.payment_stub import payment_stub
 from ..services.order_number import new_order_number
 from ..services.order_tasks import change_order_status_after_delay
 from ..models.models_order import Order, OrderItem, OrderStatus
 from ..models.models_cart import CartItem
+from ..models.models_menu import Menu
 
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -89,8 +89,15 @@ def create_guest_order(
         order_number=new_order_number(),
     )
 
+    menu_by_id = {
+        menu_item.id: menu_item
+        for menu_item in db.query(Menu).filter(
+            Menu.id.in_({item.menu_item_id for item in order_data.items})
+        ).all()
+    }
+
     for item in order_data.items:
-        menu_item = menu_crud.get_menu_item(db, item.menu_item_id)
+        menu_item = menu_by_id.get(item.menu_item_id)
         if not menu_item:
             raise HTTPException(status_code=400, detail=f"Товар с id {item.menu_item_id} не найден")
 
@@ -117,8 +124,7 @@ def create_guest_order(
         db.rollback()
         raise
 
-    db.refresh(new_order)
-    return new_order
+    return load_order_for_response(db, new_order.id)
 
 
 @router.post("/{order_id}/repeat", response_model=OrderResponse, status_code=201)

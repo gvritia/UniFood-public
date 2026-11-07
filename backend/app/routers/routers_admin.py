@@ -10,7 +10,7 @@ from ..dependencies import get_current_admin
 from ..schemas.schemas_user import UserResponse
 from ..schemas.schemas_order import OrderResponse, OrderStatusUpdate, OrderStatus
 from ..schemas.schemas_admin import AdminStatsResponse
-from ..crud.crud_order import update_order_status
+from ..crud.crud_order import ORDER_RESPONSE_OPTIONS, update_order_status
 from ..models.models_order import Order
 from ..models.models_user import User
 from sqlalchemy import func, desc, asc
@@ -63,7 +63,7 @@ def get_all_orders(
     search: Optional[str] = Query(None, description="Поиск по номеру заказа или email пользователя"),
 ):
     """Просмотр всех заказов + поиск + сортировка"""
-    query = db.query(Order)
+    query = db.query(Order).options(*ORDER_RESPONSE_OPTIONS)
 
     if status_filter:
         query = query.filter(Order.status == status_filter)
@@ -111,7 +111,7 @@ def download_order(
     current_admin: UserResponse = Depends(get_current_admin),
 ):
     """Скачать заказ в JSON или в виде чека TXT"""
-    order = db.query(Order).filter(Order.id == order_id).first()
+    order = db.query(Order).options(*ORDER_RESPONSE_OPTIONS).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Response
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
@@ -11,6 +11,7 @@ from ..schemas.schemas_menu import (
     MenuItemCreate, MenuItemResponse, MenuItemUpdate
 )
 from ..crud.crud_menu import menu_crud
+from ..services.menu_cache import menu_cache
 
 router = APIRouter(prefix="/menu", tags=["menu"])
 
@@ -32,13 +33,23 @@ def image_extension(content: bytes) -> str | None:
 
 @router.get("/", response_model=List[MenuItemResponse])
 def get_menu(
-    skip: int = 0,
-    limit: int = 100,
-    category: str | None = None,
-    q: str | None = Query(None, description="Поиск по названию блюда"),
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    category: str | None = Query(None, max_length=50),
+    q: str | None = Query(None, max_length=100, description="Поиск по названию блюда"),
     db: Session = Depends(get_db)
 ):
-    return menu_crud.get_menu_items(db, skip=skip, limit=limit, category=category, q=q)
+    key = (skip, limit, category, q)
+
+    def load_menu():
+        rows = menu_crud.get_menu_items(db, skip=skip, limit=limit, category=category, q=q)
+        # Do not keep SQLAlchemy objects tied to a closed request session.
+        return [MenuItemResponse.model_validate(row) for row in rows]
+
+    items, hit = menu_cache.get_or_load(key, load_menu)
+    response.headers["X-Menu-Cache"] = "HIT" if hit else "MISS"
+    return items
 
 
 @router.get("/{item_id}", response_model=MenuItemResponse)

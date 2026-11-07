@@ -40,6 +40,8 @@ curl.exe -X POST http://localhost:8001/auth/login -d "username=student@example.c
 
 `MenuItemCreate` содержит `food_name`, `price`, `category` и необязательные `ingredients`, `description`, `image_url`, `calories`. `MenuItemResponse` добавляет `id`, `created_at`, `updated_at`. `q` ищет по названию блюда; `category` фильтрует по категории.
 
+`skip` начинается с нуля, `limit` допускает значения 1–100 (по умолчанию 100). Список отсортирован по `id`. Повторный запрос может обслуживаться из кэша на 30 секунд; заголовок `X-Menu-Cache` показывает `HIT` или `MISS`.
+
 Цена должна быть больше нуля и не превышать 100 000 ₽. Фото может быть JPEG, PNG или WebP размером до 5 МБ; содержимое файла проверяется независимо от имени и MIME-типа, указанного отправителем.
 
 ```bash
