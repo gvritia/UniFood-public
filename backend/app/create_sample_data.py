@@ -1,17 +1,43 @@
+"""Idempotent local demo data for both supported roles and the main workflows.
+
+Run with ``python -m app.create_sample_data`` inside the backend container.
+The published credentials are only suitable for a local demonstration.
 """
-Скрипт для создания тестовых данных (меню + администратор)
-Запуск: python -m app.create_sample_data
-"""
+
+import argparse
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
-from app.db import SessionLocal, engine, Base
-from app.crud.crud_menu import menu_crud
-from app.crud.crud_user import user as crud_user
-from app.schemas.schemas_menu import MenuItemCreate
-from app.schemas.schemas_user import UserCreate
 
-# Создаем таблицы (если ещё не созданы)
-Base.metadata.create_all(bind=engine)
+from app.crud.crud_user import user as crud_user
+from app.db import Base, SessionLocal, engine
+from app.models.models_cart import CartItem
+from app.models.models_menu import Menu
+from app.models.models_order import Order, OrderItem, OrderStatus
+from app.models.models_user import User
+from app.schemas.schemas_menu import MenuItemCreate
+from app.services.menu_cache import menu_cache
+
+
+DEMO_PASSWORD = "DemoPass2026!"
+DEMO_ACCOUNTS = (
+    ("demo.admin@unifood.ru", "Администратор", True, 0.0),
+    ("demo.student@unifood.ru", "Студент Анна", False, 1800.0),
+    ("demo.student2@unifood.ru", "Студент Борис", False, 900.0),
+)
+
+DEMO_ORDERS = (
+    ("DEMO-NEW-001", "demo.student@unifood.ru", OrderStatus.NEW,
+     (("Пицца Маргарита", 1), ("Кола", 1))),
+    ("DEMO-PREP-002", "demo.student@unifood.ru", OrderStatus.PREPARING,
+     (("Бургер Классический", 2),)),
+    ("DEMO-READY-003", "demo.student2@unifood.ru", OrderStatus.READY,
+     (("Паста Карбонара", 1), ("Лимонад", 1))),
+    ("DEMO-DONE-004", "demo.student@unifood.ru", OrderStatus.COMPLETED,
+     (("Цезарь с курицей", 1), ("Чизкейк", 1))),
+    ("DEMO-CANCEL-005", "demo.student2@unifood.ru", OrderStatus.CANCELLED,
+     (("Пицца Пепперони", 1),)),
+)
 
 # ==================== ТЕСТОВЫЕ БЛЮДА ====================
 sample_menu_items = [
@@ -38,45 +64,112 @@ sample_menu_items = [
 ]
 
 
-def create_sample_data():
-    db: Session = SessionLocal()
+def seed_demo_data(db: Session, *, reset_demo_passwords: bool = False) -> dict[str, int]:
+    """Add missing demo records without deleting or replacing application data."""
+    counts = {"menu": 0, "users": 0, "cart_items": 0, "orders": 0}
     try:
-        # === Создаём меню ===
-        existing_menu = menu_crud.get_menu_items(db, limit=1)
-        if not existing_menu:
-            print("Создаём тестовое меню...")
-            for item in sample_menu_items:
-                menu_crud.create_menu_item(db, item)
-                print(f"✓ Добавлено: {item.food_name}")
-            print("✅ Меню успешно создано!\n")
-        else:
-            print("Меню уже существует, пропускаем.\n")
+        names = [item.food_name for item in sample_menu_items]
+        menu_by_name = {
+            item.food_name: item
+            for item in db.query(Menu).filter(Menu.food_name.in_(names)).all()
+        }
+        for item in sample_menu_items:
+            if item.food_name not in menu_by_name:
+                row = Menu(**item.model_dump())
+                db.add(row)
+                menu_by_name[item.food_name] = row
+                counts["menu"] += 1
+        db.flush()
 
-        # === Создаём администратора ===
-        admin_email = "admin@unifood.ru"
-        admin_exists = crud_user.get_user_by_email(db, admin_email)
+        emails = [account[0] for account in DEMO_ACCOUNTS]
+        users_by_email = {
+            account.email: account
+            for account in db.query(User).filter(User.email.in_(emails)).all()
+        }
+        new_emails = set()
+        for email, name, is_admin, balance in DEMO_ACCOUNTS:
+            account = users_by_email.get(email)
+            if account is None:
+                account = User(
+                    email=email, name=name, is_admin=is_admin,
+                    hashed_password=crud_user.get_password_hash(DEMO_PASSWORD),
+                    balance=balance,
+                )
+                db.add(account)
+                users_by_email[email] = account
+                new_emails.add(email)
+                counts["users"] += 1
+            elif account.is_admin != is_admin:
+                raise ValueError(f"Demo account {email} has an unexpected role")
+            elif reset_demo_passwords:
+                account.hashed_password = crud_user.get_password_hash(DEMO_PASSWORD)
+        db.flush()
 
-        if not admin_exists:
-            admin_data = UserCreate(
-                email=admin_email,
-                name="admin",
-                password="admin123",
-                is_admin=True
-            )
-            crud_user.create_user(db, admin_data)
-            print(f"✅ Администратор создан!")
-            print(f"   Email: {admin_email}")
-            print(f"   Пароль: admin123\n")
-        else:
-            print(f"Администратор {admin_email} уже существует.\n")
+        # A ready cart demonstrates quantity changes and checkout without
+        # altering a student's cart on subsequent runs.
+        if "demo.student@unifood.ru" in new_emails:
+            student_id = users_by_email["demo.student@unifood.ru"].id
+            for name, quantity in (("Пицца Маргарита", 1), ("Лимонад", 2)):
+                db.add(CartItem(
+                    user_id=student_id,
+                    menu_item_id=menu_by_name[name].id,
+                    quantity=quantity,
+                ))
+                counts["cart_items"] += 1
 
-        print("🎉 Все тестовые данные готовы к использованию!")
+        numbers = [spec[0] for spec in DEMO_ORDERS]
+        existing_numbers = {
+            number for (number,) in db.query(Order.order_number)
+            .filter(Order.order_number.in_(numbers)).all()
+        }
+        now = datetime.now(timezone.utc)
+        for index, (number, email, status, lines) in enumerate(DEMO_ORDERS):
+            if number in existing_numbers:
+                continue
+            items = [
+                OrderItem(
+                    menu_item_id=menu_by_name[name].id,
+                    quantity=quantity,
+                    price_at_order=menu_by_name[name].price,
+                )
+                for name, quantity in lines
+            ]
+            total = round(sum(item.quantity * item.price_at_order for item in items), 2)
+            db.add(Order(
+                user_id=users_by_email[email].id,
+                order_number=number,
+                status=status,
+                total_price=total,
+                created_at=now - timedelta(hours=index + 1),
+                items=items,
+            ))
+            counts["orders"] += 1
 
-    except Exception as e:
-        print(f"❌ Ошибка при создании тестовых данных: {e}")
-    finally:
-        db.close()
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    menu_cache.invalidate()
+    return counts
+
+
+def create_sample_data(*, reset_demo_passwords: bool = False) -> dict[str, int]:
+    Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        counts = seed_demo_data(db, reset_demo_passwords=reset_demo_passwords)
+    print(f"Добавлено: {counts['menu']} блюд, {counts['users']} пользователей, "
+          f"{counts['cart_items']} позиций корзины, {counts['orders']} заказов.")
+    print("Демонстрационные логины и пароль указаны в README.md.")
+    print("Если меню кэшировалось до запуска скрипта, обновите страницу через 30 секунд.")
+    return counts
 
 
 if __name__ == "__main__":
-    create_sample_data()
+    parser = argparse.ArgumentParser(description="Create local UniFood demo records")
+    parser.add_argument(
+        "--reset-demo-passwords", action="store_true",
+        help="restore the README password only for the three named demo accounts",
+    )
+    args = parser.parse_args()
+    create_sample_data(reset_demo_passwords=args.reset_demo_passwords)

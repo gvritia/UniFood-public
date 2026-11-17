@@ -21,6 +21,8 @@ with patch.object(Base.metadata, "create_all"):
     from app.main import app  # noqa: E402
 
 from app.api.auth import create_access_token  # noqa: E402
+from app.create_sample_data import DEMO_ACCOUNTS, DEMO_PASSWORD, seed_demo_data  # noqa: E402
+from app.crud.crud_user import user as crud_user  # noqa: E402
 from app.models.models_cart import CartItem  # noqa: E402
 from app.models.models_menu import Menu  # noqa: E402
 from app.models.models_order import Order, OrderItem, OrderStatus  # noqa: E402
@@ -365,6 +367,42 @@ class AuthorizationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["items"]), 5)
         self.assertLessEqual(len(menu_selects), 2, menu_selects)
+
+    def test_demo_seed_creates_both_roles_and_is_repeatable(self):
+        self.assertEqual(
+            seed_demo_data(self.db),
+            {"menu": 10, "users": 3, "cart_items": 2, "orders": 5},
+        )
+        self.assertEqual(self.db.query(Menu).count(), 10)
+        self.assertEqual(self.db.query(CartItem).count(), 2)
+        self.assertEqual(self.db.query(Order).count(), 5)
+        self.assertEqual(self.db.query(User).count(), 6)  # three existing fixture users survive
+        self.assertEqual(
+            {order.status for order in self.db.query(Order).all()}, set(OrderStatus)
+        )
+
+        for email, _, is_admin, _ in DEMO_ACCOUNTS:
+            account = self.db.query(User).filter(User.email == email).one()
+            self.assertEqual(account.is_admin, is_admin)
+            self.assertTrue(crud_user.pwd_context.verify(DEMO_PASSWORD, account.hashed_password))
+            login = self.client.post(
+                "/auth/login", data={"username": email, "password": DEMO_PASSWORD}
+            )
+            self.assertEqual(login.status_code, 200)
+            self.assertEqual(login.json()["user"]["is_admin"], is_admin)
+
+        self.assertEqual(
+            seed_demo_data(self.db),
+            {"menu": 0, "users": 0, "cart_items": 0, "orders": 0},
+        )
+
+        student = self.db.query(User).filter(User.email == "demo.student@unifood.ru").one()
+        student.hashed_password = crud_user.get_password_hash("ChangedPass2026!")
+        self.db.commit()
+        seed_demo_data(self.db)
+        self.assertFalse(crud_user.pwd_context.verify(DEMO_PASSWORD, student.hashed_password))
+        seed_demo_data(self.db, reset_demo_passwords=True)
+        self.assertTrue(crud_user.pwd_context.verify(DEMO_PASSWORD, student.hashed_password))
 
 
 class MenuCacheTests(unittest.TestCase):
