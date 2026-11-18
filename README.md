@@ -41,9 +41,23 @@ UniFood/
 
 PostgreSQL доступен backend внутри сети Compose. Данные БД и загруженные изображения сохраняются в томах Docker при перезапуске контейнеров. Для остановки выполните `docker compose down`; тома при этом сохраняются.
 
+### Просмотр PostgreSQL в PyCharm
+
+Добавьте **новый** источник данных PostgreSQL. Локальный источник `postgres@localhost` на порту 5432 относится к другой установке PostgreSQL и не показывает данные Docker Compose.
+
+| Поле | Значение |
+| --- | --- |
+| Host | `localhost` |
+| Port | `15432` |
+| Database | `unifood` |
+| User | `unifood` |
+| Password | значение `POSTGRES_PASSWORD` из корневого `.env` |
+
+Контейнерная БД открыта на этом порту только для данного компьютера (`127.0.0.1`). После подключения откройте схему `public`: таблицы `users`, `menu`, `cart_items`, `orders`, `order_items`. Проверка через терминал: `docker compose exec db psql -U unifood -d unifood -c "SELECT count(*) FROM menu;"`.
+
 ### Запуск без Docker
 
-Запустите PostgreSQL и создайте БД `unifood` и пользователя `unifood`. Скопируйте `backend/.env.example` в `backend/.env` и задайте реальные `DATABASE_URL` и `SECRET_KEY`. Из папки `backend` установите зависимости командой `pip install -r requirements.txt`, затем запустите `uvicorn app.main:app --reload --port 8001`. Из папки `frontend/unifood-frontend` выполните `npm ci` и `npm run dev`. Vite проксирует `/api` на локальный backend.
+Запустите PostgreSQL и создайте БД `unifood` и пользователя `unifood`. Скопируйте `backend/.env.example` в `backend/.env` и задайте реальные `DATABASE_URL` и `SECRET_KEY`. Пример URL использует порт `15432` контейнерной БД; для отдельного локального PostgreSQL укажите его фактический порт. Из папки `backend` установите зависимости командой `pip install -r requirements.txt`, затем запустите `uvicorn app.main:app --reload --port 8001`. Из папки `frontend/unifood-frontend` выполните `npm ci` и `npm run dev`. Vite проксирует `/api` на локальный backend.
 
 ## 📱 Страницы фронтенда
 
